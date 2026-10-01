@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-10-01T18:40:49.389103+00:00",
+  "checkpoint": "models/mangosense_cnn.pth",
+  "dataset": {
+    "path": "dataset/raw",
+    "total_images": 16,
+    "class_to_index": {
+      "GOOD": 0,
+      "BAD": 1
+    }
+  },
+  "split": {
+    "strategy": "stratified 60/20/20",
+    "test_images": 4,
+    "seed": 42
+  },
+  "metrics": {
+    "loss": 0.4591,
+    "accuracy": 0.75,
+    "precision": 0.375,
+    "recall": 0.5,
+    "f1_macro": 0.4286,
+    "per_class": [
+      {
+        "precision": 0.75,
+        "recall": 1.0,
+        "f1": 0.8571
+      },
+      {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    ]
+  },
+  "confusion_matrix": [
+    [
+      3,
+      0
+    ],
+    [
+      1,
+      0
+    ]
+  ],
+  "classification_report": {
+    "Good Yield Potential": {
+      "precision": 0.75,
+      "recall": 1.0,
+      "f1-score": 0.8571428571428571,
+      "support": 3.0
+    },
+    "Poor Yield Potential": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 1.0
+    },
+    "accuracy": 0.75,
+    "macro avg": {
+      "precision": 0.375,
+      "recall": 0.5,
+      "f1-score": 0.42857142857142855,
+      "support": 4.0
+    },
+    "weighted avg": {
+      "precision": 0.5625,
+      "recall": 0.75,
+      "f1-score": 0.6428571428571428,
+      "support": 4.0
+    }
+  },
+  "warnings": [
+    "SMALL SAMPLE SIZE: this dataset contains very few images. All metrics below are computed on a tiny held-out split and are NOT production-grade \u2014 treat them as a pipeline sanity check only, not as a measure of real-world performance."
+  ]
+}

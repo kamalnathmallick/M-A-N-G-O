@@ -1,0 +1,428 @@
+{
+  "generated_at": "2026-10-01T18:39:28.337716+00:00",
+  "dataset": {
+    "path": "dataset/raw",
+    "total_images": 16,
+    "class_to_index": {
+      "GOOD": 0,
+      "BAD": 1
+    },
+    "class_names": [
+      "GOOD",
+      "BAD"
+    ]
+  },
+  "split": {
+    "strategy": "stratified 60/20/20",
+    "seed": 42,
+    "counts": {
+      "train": 9,
+      "val": 3,
+      "test": 4
+    },
+    "group_metadata_csv": null,
+    "test_set_used_for_training": false
+  },
+  "model": {
+    "backbone": "mobilenet_v3_small",
+    "pretrained": true,
+    "num_classes": 2,
+    "feature_dim_configured": 576,
+    "feature_dim_actual": 576,
+    "freeze_backbone": true,
+    "checkpoint": "models/mangosense_cnn.pth"
+  },
+  "training": {
+    "epochs_configured": 30,
+    "epochs_run": 30,
+    "best_epoch": 30,
+    "early_stopping_patience": 5,
+    "batch_size": 16,
+    "learning_rate": 0.0003,
+    "class_weights": [
+      0.8999999761581421,
+      1.125
+    ],
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.7106,
+        "train_accuracy": 0.3333,
+        "val_loss": 0.7082,
+        "val_accuracy": 0.3333,
+        "val_precision": 0.1667,
+        "val_recall": 0.5,
+        "val_f1_macro": 0.25
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.6726,
+        "train_accuracy": 0.5556,
+        "val_loss": 0.7016,
+        "val_accuracy": 0.3333,
+        "val_precision": 0.1667,
+        "val_recall": 0.5,
+        "val_f1_macro": 0.25
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.6595,
+        "train_accuracy": 0.6667,
+        "val_loss": 0.6943,
+        "val_accuracy": 0.3333,
+        "val_precision": 0.1667,
+        "val_recall": 0.5,
+        "val_f1_macro": 0.25
+      },
+      {
+        "epoch": 4,
+        "train_loss": 0.6493,
+        "train_accuracy": 0.6667,
+        "val_loss": 0.6859,
+        "val_accuracy": 0.3333,
+        "val_precision": 0.1667,
+        "val_recall": 0.5,
+        "val_f1_macro": 0.25
+      },
+      {
+        "epoch": 5,
+        "train_loss": 0.6478,
+        "train_accuracy": 0.5556,
+        "val_loss": 0.6795,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 6,
+        "train_loss": 0.6554,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.673,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 7,
+        "train_loss": 0.6372,
+        "train_accuracy": 0.7778,
+        "val_loss": 0.6683,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 8,
+        "train_loss": 0.5745,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6654,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 9,
+        "train_loss": 0.5803,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6623,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 10,
+        "train_loss": 0.5564,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6585,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 11,
+        "train_loss": 0.5875,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6542,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 12,
+        "train_loss": 0.551,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6493,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 13,
+        "train_loss": 0.5477,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6446,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 14,
+        "train_loss": 0.5859,
+        "train_accuracy": 0.6667,
+        "val_loss": 0.6401,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 15,
+        "train_loss": 0.5425,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6349,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 16,
+        "train_loss": 0.5272,
+        "train_accuracy": 1.0,
+        "val_loss": 0.6303,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 17,
+        "train_loss": 0.4821,
+        "train_accuracy": 1.0,
+        "val_loss": 0.6244,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 18,
+        "train_loss": 0.518,
+        "train_accuracy": 1.0,
+        "val_loss": 0.6191,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 19,
+        "train_loss": 0.4754,
+        "train_accuracy": 1.0,
+        "val_loss": 0.6148,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 20,
+        "train_loss": 0.4746,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.6106,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 21,
+        "train_loss": 0.5163,
+        "train_accuracy": 0.7778,
+        "val_loss": 0.6063,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 22,
+        "train_loss": 0.4723,
+        "train_accuracy": 1.0,
+        "val_loss": 0.6017,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 23,
+        "train_loss": 0.4501,
+        "train_accuracy": 1.0,
+        "val_loss": 0.596,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 24,
+        "train_loss": 0.4786,
+        "train_accuracy": 0.8889,
+        "val_loss": 0.5896,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 25,
+        "train_loss": 0.4411,
+        "train_accuracy": 1.0,
+        "val_loss": 0.585,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 26,
+        "train_loss": 0.4186,
+        "train_accuracy": 1.0,
+        "val_loss": 0.5802,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 27,
+        "train_loss": 0.367,
+        "train_accuracy": 1.0,
+        "val_loss": 0.576,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 28,
+        "train_loss": 0.3748,
+        "train_accuracy": 1.0,
+        "val_loss": 0.5717,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 29,
+        "train_loss": 0.3987,
+        "train_accuracy": 1.0,
+        "val_loss": 0.5677,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      },
+      {
+        "epoch": 30,
+        "train_loss": 0.3569,
+        "train_accuracy": 1.0,
+        "val_loss": 0.5643,
+        "val_accuracy": 0.6667,
+        "val_precision": 0.75,
+        "val_recall": 0.75,
+        "val_f1_macro": 0.6667
+      }
+    ]
+  },
+  "best_val_metrics": {
+    "loss": 0.5643,
+    "accuracy": 0.6667,
+    "precision": 0.75,
+    "recall": 0.75,
+    "f1_macro": 0.6667,
+    "per_class": [
+      {
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": 0.6667
+      },
+      {
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6667
+      }
+    ]
+  },
+  "test_metrics": {
+    "loss": 0.4764,
+    "accuracy": 0.75,
+    "precision": 0.375,
+    "recall": 0.5,
+    "f1_macro": 0.4286,
+    "per_class": [
+      {
+        "precision": 0.75,
+        "recall": 1.0,
+        "f1": 0.8571
+      },
+      {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    ]
+  },
+  "test_confusion_matrix": [
+    [
+      3,
+      0
+    ],
+    [
+      1,
+      0
+    ]
+  ],
+  "test_classification_report": {
+    "GOOD": {
+      "precision": 0.75,
+      "recall": 1.0,
+      "f1-score": 0.8571428571428571,
+      "support": 3.0
+    },
+    "BAD": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 1.0
+    },
+    "accuracy": 0.75,
+    "macro avg": {
+      "precision": 0.375,
+      "recall": 0.5,
+      "f1-score": 0.42857142857142855,
+      "support": 4.0
+    },
+    "weighted avg": {
+      "precision": 0.5625,
+      "recall": 0.75,
+      "f1-score": 0.6428571428571428,
+      "support": 4.0
+    }
+  },
+  "warnings": [
+    "SMALL SAMPLE SIZE: this dataset contains very few images. All metrics below are computed on a tiny held-out split and are NOT production-grade \u2014 treat them as a pipeline sanity check only, not as a measure of real-world performance.",
+    "Dataset has only 16 images (<100). Expect high variance between runs; collect more field data before relying on these numbers."
+  ]
+}

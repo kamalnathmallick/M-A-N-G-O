@@ -1,0 +1,87 @@
+# MangoSense ML Configuration Specification
+# Binary classification: GOOD (index 0) -> "Good Yield Potential" / status healthy
+#                        BAD  (index 1) -> "Poor Yield Potential"  / status poor_yield
+
+cnn:
+  backbone: "mobilenet_v3_small" # Options: mobilenet_v3_small, resnet50, efficientnet_b0
+  pretrained: true
+  num_classes: 2
+  class_labels:
+    - "Good Yield Potential"
+    - "Poor Yield Potential"
+  # Folder name (under dataset/raw/) -> class index. Case-insensitive.
+  class_to_folder:
+    GOOD: 0
+    BAD: 1
+  input_size: [224, 224]
+  # Dimension of the penultimate feature vector. MUST match the backbone:
+  #   mobilenet_v3_small = 576, resnet50 = 2048, efficientnet_b0 = 1280
+  # train.py verifies this against the built model and records the verified
+  # value in models/training_metrics.json; inference/fusion read it from here.
+  feature_dim: 576
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+  dropout: 0.2
+
+model_versions:
+  cnn: "mangosense-cnn-v1"
+  yield_rule: "mangosense-yield-rule-v1"
+  yield_regressor: "mangosense-yield-v1"
+
+preprocessing:
+  blur_laplacian_threshold: 60.0
+  min_brightness: 30.0
+  max_brightness: 245.0
+  min_dimension: 100
+  # Read by preprocessor.preprocess_image() via inference/predict.py
+  resize_interpolation: "INTER_LINEAR" # Options: INTER_LINEAR, INTER_AREA, INTER_CUBIC, INTER_NEAREST
+  # Optional noise filtering (spec §9). "none" = disabled (default).
+  # Options: none | gaussian | nlmeans
+  noise_filter: "none"
+  noise_filter_strength: 10
+
+training:
+  batch_size: 16
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  epochs: 30
+  # Training stops after this many epochs without val-loss improvement.
+  early_stopping_patience: 5
+  # Group-aware splitting key. Activates ONLY when a metadata CSV with this
+  # column (plus image_path/label) exists — see dataset/metadata.csv handling
+  # in dataset_loader.build_records_from_directory(). Otherwise a stratified
+  # split is used (documented in ml/README.md).
+  group_aware_key: "farm_id"
+  freeze_backbone: true   # train classifier head only (recommended for tiny datasets)
+  use_class_weights: true # inverse-frequency class weights on the train split
+  seed: 42
+  num_workers: 0          # Windows-safe DataLoader workers
+  # Fractions for the stratified split (must sum to 1.0)
+  split:
+    train: 0.6
+    val: 0.2
+    test: 0.2
+  # Training-split augmentation only (never applied to val/test)
+  augmentation:
+    random_resized_crop_scale: [0.75, 1.0]
+    horizontal_flip: 0.5
+    vertical_flip: 0.25
+    rotation_degrees: 20
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.05
+
+yield_regressor:
+  model_type: "random_forest" # Options: random_forest, gradient_boosting, svr
+  n_estimators: 100
+  max_depth: 8
+  climate_features:
+    - "temperature"
+    - "humidity"
+    - "rainfall"
+    - "wind_speed"
+    - "vapor_pressure_deficit"
+    - "soil_moisture"
+  target: "yield_tonnes_per_acre"

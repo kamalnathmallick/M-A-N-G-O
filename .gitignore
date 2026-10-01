@@ -1,0 +1,27 @@
+# Node
+**/node_modules/
+
+# Environment
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Frontend build
+**/dist/
+**/build/
+
+# Python
+**/venv/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+
+# Logs
+**/*.log
+**/*.pid
+
+# Runtime uploads
+backend/uploads/
+
+# IDE
+.vscode/

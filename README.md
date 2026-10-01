@@ -52,13 +52,13 @@ MangoSense/
 │
 ├── backend/                   # MEAN Stack Node.js/Express Backend
 │   ├── src/
-│   │   ├── config/            # db.js, env.js
-│   │   ├── controllers/       # auth, farm, prediction, weather, history, dashboard, recommendation
+│   │   ├── config/            # db.js, env.js, recommendationRules.js (threshold-based rules)
+│   │   ├── controllers/       # auth, farm, prediction, weather, history, dashboard, recommendation, user, image
 │   │   ├── middleware/        # authMiddleware, uploadMiddleware, errorMiddleware
 │   │   ├── models/            # User, Farm, Image, Prediction, Weather, Recommendation, HistoryRecord
-│   │   ├── routes/            # REST API route handlers
-│   │   ├── services/          # mlClientService, weatherService, recommendationService, seedService
-│   │   ├── utils/             # apiResponse, logger
+│   │   ├── routes/            # REST API route handlers (auth, farms, predictions, weather, history, recommendations, dashboard, users, images)
+│   │   ├── services/          # mlClientService, weatherService, weatherProviders, recommendationService, seedService, offlineAuthStore
+│   │   ├── utils/             # apiResponse
 │   │   ├── tests/             # Node native automated API test suite
 │   │   └── server.js          # Express app entry point
 │   ├── uploads/               # Multipart uploaded bud image storage
@@ -114,45 +114,71 @@ MangoSense/
 ## 4. Database Schema (MongoDB / Mongoose)
 
 1. **`User`**: `name`, `email` (unique index), `password` (bcrypt hash), `phone`, `role` (`farmer`, `agronomist`), `location`.
-2. **`Farm`**: `userId`, `name`, `location`, `totalArea`, `establishedYear`, `soilType`, `irrigationType`, `plots` (array of subdocuments containing `id`, `name`, `variety`, `treeCount`, `treeAge`, `floweringStage`, `healthScore`, `expectedYield`, `yieldUnit`, `flowerDropRisk`, `climateRisk`).
-3. **`Image`**: `userId`, `farmId`, `plotId`, `filename`, `url`, `filePath`, `canopyDirection`, `stage`, `quality` (`blurScore`, `isBlurry`, `brightness`), `classification`, `confidence`, `detectedBuds`, `healthyBuds`, `affectedBuds`, `boxes`.
-4. **`Prediction`**: `userId`, `farmId`, `plotId`, `variety`, `floweringStage`, `expectedYieldMin`, `expectedYieldMax`, `expectedYieldAverage`, `totalPlotExpectedMin`, `totalPlotExpectedMax`, `factors` (`budHealth`, `climate`, `flowerDropRisk`, `pestRisk`), `modelVersion` (`budModel`, `yieldModel`), `isDemo`.
-5. **`Weather`**: `farmId`, `temperature`, `condition`, `humidity`, `rainfall`, `windSpeed`, `solarRadiation`, `vaporPressureDeficit`, `soilMoisture`, `forecast` (15 daily projections), `summary`.
-6. **`Recommendation`**: `farmId`, `plotId`, `predictionId`, `category` (`WATER`, `PEST`, `POLLINATION`, `NUTRITION`, `DISEASE`), `title`, `priority` (`HIGH`, `MEDIUM`, `LOW`), `shortText`, `fullExplanation`, `actionRequired`, `timing`, `organicAlternative`.
-7. **`HistoryRecord`**: `userId`, `farmId`, `plot`, `plotDetails`, `date`, `budHealth`, `flowerDropRisk`, `climateCondition`, `predictedYield`, `totalTonnes`, `sampleCount`, `keyObservation`.
+2. **`Farm`**: `userId` (indexed), `name`, `location`, `totalArea`, `establishedYear`, `soilType`, `irrigationType`, `season` (indexed), `isDemo`, `plots` (array of subdocuments containing `id`, `name`, `variety`, `treeCount`, `treeAge`, `floweringStage`, `healthScore`, `expectedYield`, `yieldUnit`, `flowerDropRisk`, `climateRisk`).
+3. **`Image`**: `userId` (indexed), `farmId`, `plotId`, `season` (indexed), `filename`, `url`, `filePath`, `canopyDirection`, `stage`, `quality` (`blurScore`, `isBlurry`, `brightness`), `classification`, `confidence`, `isDemo`. (No bud counts or bounding boxes are ever fabricated or emitted — see CONTRACT.md §0.)
+4. **`Prediction`**: `userId` (indexed), `farmId`, `plotId`, `season` (indexed), `variety`, `floweringStage`, `expectedYieldMin`, `expectedYieldMax`, `expectedYieldAverage`, `totalPlotExpectedMin`, `totalPlotExpectedMax`, `factors` (`budHealth`, `climate`, `flowerDropRisk`, `pestRisk`), `modelVersion` (`budModel`, `yieldModel`), `isDemo`.
+5. **`Weather`**: `farmId`, `temperature`, `condition`, `humidity`, `rainfall`, `windSpeed`, `solarRadiation`, `vaporPressureDeficit`, `soilMoisture`, `isDemo`, `forecast` (15 daily projections, each carrying `isDemo`), `summary`.
+6. **`Recommendation`**: `farmId`, `plotId`, `predictionId`, `category` (`WATER`, `PEST`, `POLLINATION`, `NUTRITION`, `DISEASE`, `WEATHER`), `title`, `priority` (`HIGH`, `MEDIUM`, `LOW`), `shortText`, `fullExplanation`, `actionRequired`, `timing`, `organicAlternative`, `isDemo`.
+7. **`HistoryRecord`**: `userId` (indexed), `farmId`, `season` (indexed), `imageIds`, `classification`, `confidence`, `climate` (temperature/humidity/isLive), structured numeric yield fields (`expectedYieldMin/Max/Average`, `totalPlotExpectedMin/Max`), `modelVersion` (`budModel`, `yieldModel`), `plot`, `plotDetails`, `date` (`createdAt` indexed), `budHealth`, `flowerDropRisk`, `climateCondition`, `predictedYield`, `totalTonnes`, `sampleCount`, `keyObservation`, `isDemo`.
 
 ---
 
 ## 5. REST API Endpoints
+
+> All data endpoints require `Authorization: Bearer <token>` (issued by
+> register/login) and are scoped to the authenticated user. Only
+> `POST /api/auth/register`, `POST /api/auth/login` and `GET /api/health` are
+> public. Demo/fallback payloads are always flagged with `isDemo: true`.
 
 ### Authentication
 * `POST /api/auth/register` — Register a new farmer account
 * `POST /api/auth/login` — Authenticate and receive JWT token
 * `GET /api/auth/me` — Retrieve current authenticated user profile
 
+### Users & Images (auth-protected)
+* `GET /api/users` / `GET /api/users/me` — Current user (`data: { user }`)
+* `GET /api/images?farmId=...&plotId=...` — Image metadata for the signed-in user (`data: { images: [...] }`)
+
 ### Farm & Plot Management
-* `GET /api/farms` — List farms and plots
-* `GET /api/farms/:id` — Retrieve specific farm details
-* `POST /api/farms` — Create new farm/plot
-* `PUT /api/farms/:id` — Update farm/plot
+* `GET /api/farms` — List the signed-in user's farms and plots (demo farms when no stored farms exist)
+* `GET /api/farms/:id` — Retrieve specific farm details (ownership-checked; unknown ids → 404)
+* `POST /api/farms` — Create new farm/plot (accepts `season`; 503 when MongoDB is offline)
+* `PUT /api/farms/:id` — Update farm/plot (whitelisted fields only — no mass assignment)
 * `DELETE /api/farms/:id` — Delete farm
 
 ### Flower Bud & Yield Predictions
-* `POST /api/predictions/bud` — Multipart upload of up to 10 canopy sample images (forwards to ML service for quality validation and CNN inference)
+* `POST /api/predictions/bud` — Multipart upload of up to 10 canopy sample images (`images[]`, `farmId`, `plotId`, `variety`, `floweringStage`, `canopyDirection`, `season`; forwards to ML service for quality validation and CNN inference; zero files → 400)
 * `GET /api/predictions/latest?plotId=...` — Retrieve latest yield and bud analysis for plot
 * `POST /api/predictions/simulate` — Dynamic "What-If" sensitivity simulator
 
 ### Climate & Weather
-* `GET /api/weather/current?farmId=...` — Microclimate sensor telemetry (temperature, humidity, rainfall, VPD, solar radiation)
-* `GET /api/weather/forecast?farmId=...` — 15-day agronomic weather forecast
-* `GET /api/weather/summary?farmId=...` — Flower-drop weather risk summary
+* `GET /api/weather/current?farmId=...` — Microclimate sensor telemetry (temperature, humidity, rainfall, VPD, solar radiation) + `isDemo`
+* `GET /api/weather/forecast?farmId=...` — 15-day agronomic weather forecast (every entry carries `isDemo`)
+* `GET /api/weather/summary?farmId=...` — Flower-drop weather risk summary + `isDemo`
+
+Weather provider is selected with env vars in `backend/.env`:
+
+```env
+# 'mock' (default) = offline demo data, always flagged isDemo: true
+# 'openmeteo'      = live keyless API (https://open-meteo.com), isDemo: false
+WEATHER_PROVIDER=mock
+OPENMETEO_LATITUDE=16.25
+OPENMETEO_LONGITUDE=73.38
+OPENMETEO_LOCATION_NAME=Open-Meteo (farm coordinates)
+```
 
 ### History & Advisory
-* `GET /api/history` — Temporal history records
-* `GET /api/history/:id` — Detailed single analysis record
-* `POST /api/history` — Create manual historical log
-* `GET /api/recommendations` — Prioritized scientific IPM and organic farm recommendations
+* `GET /api/history` — Temporal history records for the signed-in user (demo records flagged `isDemo: true` when none stored)
+* `GET /api/history/:id` — Detailed single analysis record (ownership-checked)
+* `POST /api/history` — Create manual historical log (validated + field whitelist, no raw body spread)
+* `GET /api/recommendations` — Rule-based recommendations generated from the latest prediction + weather
 * `GET /api/dashboard` — Aggregated dashboard metrics
+
+Recommendation rules live in `backend/src/config/recommendationRules.js`:
+each rule is `IF <metric> <op> <threshold> THEN <recommendation>` with all
+thresholds exported in `THRESHOLDS` (unit-tested). The rule engine evaluates
+the latest prediction and the 15-day forecast; DB-seeded recommendations are
+used only as an `isDemo: true` fallback.
 
 ---
 

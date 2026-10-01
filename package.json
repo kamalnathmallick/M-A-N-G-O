@@ -1,0 +1,12 @@
+{
+  "name": "mangosense-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MangoSense — Full-Stack Smart Agriculture Mango Flower Bud & Yield Prediction System",
+  "scripts": {
+    "start:frontend": "npm --prefix frontend run dev",
+    "start:backend": "npm --prefix backend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "test:backend": "npm --prefix backend test"
+  }
+}
