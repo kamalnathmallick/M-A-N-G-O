@@ -10,7 +10,8 @@
     "start:mongo": "node scripts/start-mongo.js",
     "build:frontend": "npm --prefix frontend run build",
     "test:backend": "npm --prefix backend test",
-    "test:ml-eval": "cd ml && venv\\Scripts\\python.exe evaluation/evaluate.py"
+    "test:ml-eval": "cd ml && venv\\Scripts\\python.exe evaluation/evaluate.py",
+    "docs:build": "node scripts/build-docs.mjs"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.4"
