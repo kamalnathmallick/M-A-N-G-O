@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-01T18:40:49.389103+00:00",
+  "generated_at": "2026-10-02T04:17:19.766635+00:00",
   "checkpoint": "models/mangosense_cnn.pth",
   "dataset": {
     "path": "dataset/raw",

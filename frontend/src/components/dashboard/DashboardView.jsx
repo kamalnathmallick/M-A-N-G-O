@@ -24,8 +24,10 @@ export default function DashboardView({
   const currentPlot = currentFarm?.plots.find(p => p.id === selectedPlot) || currentFarm?.plots[0];
 
   // Data-driven badges: only call isEndpointLive at render (never in effects/callbacks).
+  // Honest on both counts: the endpoint must have answered AND the payload must
+  // not be flagged isDemo (the backend serves 200 + demo farms while MongoDB is offline).
   const farmsLive = isEndpointLive('farms');
-  const dataBadge = farmsLive ? 'Live Model Result' : 'Demo Data';
+  const dataBadge = farmsLive && currentFarm?.isDemo === false ? 'Live Model Result' : 'Demo Data';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">

@@ -6,7 +6,13 @@
   "scripts": {
     "start:frontend": "npm --prefix frontend run dev",
     "start:backend": "npm --prefix backend run dev",
+    "start:ml": "cd ml && venv\\Scripts\\python.exe -m uvicorn main:app --port 8000",
+    "start:mongo": "node scripts/start-mongo.js",
     "build:frontend": "npm --prefix frontend run build",
-    "test:backend": "npm --prefix backend test"
+    "test:backend": "npm --prefix backend test",
+    "test:ml-eval": "cd ml && venv\\Scripts\\python.exe evaluation/evaluate.py"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.1.4"
   }
 }

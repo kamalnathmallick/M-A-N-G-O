@@ -35,7 +35,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { user, initializing: authInitializing } = useAuth();
+  const { user, demoMode, initializing: authInitializing } = useAuth();
 
   // Navigation & View State
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -64,7 +64,11 @@ function AppShell() {
   useEffect(() => subscribeApiStatus(() => setApiTick((t) => t + 1)), []);
 
   useEffect(() => {
-    // Dynamic load from backend with mock fallback (services never throw here)
+    // Dynamic load from backend with mock fallback (services never throw here).
+    // Re-runs when the session changes (login/logout/demo toggle) so data is
+    // re-fetched WITH the new token — otherwise everything would stay on the
+    // unauthenticated 401 fallback captured before sign-in.
+    if (!user) return undefined;
     let pending = 5;
     const done = () => {
       pending -= 1;
@@ -94,13 +98,15 @@ function AppShell() {
     mockRecommendationService.getOverallFarmRisk().then(res => {
       if (res) setOverallRisk(res);
     });
-  }, []);
+  }, [user?.id, demoMode]);
 
   useEffect(() => {
+    if (!user) return undefined;
     mockPredictionService.getLatestPrediction(selectedPlot).then(res => {
       setPredictionData(res);
     });
-  }, [selectedPlot]);
+    return undefined;
+  }, [selectedPlot, user?.id, demoMode]);
 
   // Handle Analysis Completed from Wizard
   const handleAnalysisCompleted = (data) => {
@@ -132,8 +138,11 @@ function AppShell() {
   }
 
   // Global offline/demo notice — errors are never silently swallowed (§22).
+  // In demo mode the backend is intentionally not used (requests 401 without a
+  // token), so the "server refused" notice would be misleading — demo data is
+  // already labelled "Demo Data" everywhere and TopBar shows the demo pill.
   const connectivity = getConnectivity();
-  const showOfflineNotice = connectivity.observed && !connectivity.anyLive;
+  const showOfflineNotice = connectivity.observed && !connectivity.anyLive && !demoMode;
 
   return (
     <div className="min-h-screen bg-[#F8FAF8] flex flex-col md:flex-row text-slate-800 antialiased font-sans overflow-x-hidden">

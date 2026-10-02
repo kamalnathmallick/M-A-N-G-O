@@ -3,6 +3,7 @@ process.env.NODE_ENV = 'test';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'http';
+import zlib from 'node:zlib';
 import mongoose from 'mongoose';
 
 import app from '../server.js';
@@ -60,10 +61,79 @@ const registerUser = async (label) => {
   return { email, token: r.json.data.token, user: r.json.data.user };
 };
 
-const buildImageForm = ({ fileCount = 2, type = 'image/jpeg', name = 'bud_sample.jpg', fields = {} } = {}) => {
+// --- Deterministic CRC32 + PNG encoder (pure Node, no new dependencies) -----
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+const crc32 = (buf) => {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i += 1) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+};
+
+const pngChunk = (type, data) => {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const typeBuf = Buffer.from(type, 'ascii');
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+  return Buffer.concat([len, typeBuf, data, crc]);
+};
+
+/**
+ * A real, decodable 128x128 RGB PNG of deterministic mid-brightness noise.
+ *
+ * The ML service quality-gates every upload (min 100x100, Laplacian blur
+ * variance >= 60, mean brightness within 30..245), so an 8-byte fake JPEG
+ * header is rejected whenever the ML service is online — which made the
+ * upload/history/images tests fail in the DB+ML-online configuration while
+ * passing offline. Noise satisfies all three gates; the LCG keeps bytes
+ * identical across runs.
+ */
+const makeTestPng = (size = 128) => {
+  const raw = Buffer.alloc((size * 3 + 1) * size);
+  let pos = 0;
+  let seed = 0x12345678;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  for (let y = 0; y < size; y += 1) {
+    raw[pos] = 0; // scanline filter: none
+    pos += 1;
+    for (let x = 0; x < size; x += 1) {
+      raw[pos] = 60 + Math.floor(rand() * 100); // R (mean ~110)
+      raw[pos + 1] = 60 + Math.floor(rand() * 100); // G
+      raw[pos + 2] = 60 + Math.floor(rand() * 100); // B
+      pos += 3;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // color type: truecolor RGB
+  // [10] compression, [11] filter method, [12] interlace — all 0
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0))
+  ]);
+};
+
+const buildImageForm = ({ fileCount = 2, type = 'image/png', name = 'bud_sample.png', fields = {} } = {}) => {
   const fd = new FormData();
+  const png = makeTestPng();
   for (let i = 0; i < fileCount; i += 1) {
-    fd.append('images', new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])], { type }), `${i}-${name}`);
+    fd.append('images', new Blob([png], { type }), `${i}-${name}`);
   }
   for (const [key, value] of Object.entries(fields)) {
     fd.append(key, value);

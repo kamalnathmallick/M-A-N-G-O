@@ -64,7 +64,7 @@ export default function TopBar({
             <h1 className="text-base sm:text-xl md:text-2xl font-bold text-slate-900 font-display tracking-tight truncate">
               Good morning, Farmer! 👋
             </h1>
-            <span className="hidden sm:inline-block px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200/60">
+            <span className="hidden sm:inline-block shrink-0 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200/60 whitespace-nowrap">
               Active Season 2026
             </span>
           </div>

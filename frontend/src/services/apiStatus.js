@@ -12,7 +12,8 @@
 const statuses = {};
 const listeners = new Set();
 
-const normalize = (endpoint = '') => String(endpoint).split('?')[0];
+const normalize = (endpoint = '') =>
+  String(endpoint).split('?')[0].replace(/^\/+/, '').toLowerCase();
 
 const set = (key, value) => {
   if (statuses[key] === value) return;
