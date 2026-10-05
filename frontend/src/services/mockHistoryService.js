@@ -102,9 +102,9 @@ export const mockHistoryService = {
       const endpoint = plotId ? `/history?plotId=${plotId}` : '/history';
       const data = await apiClient.get(endpoint);
       if (Array.isArray(data) && data.length > 0) {
-        // Live records carry an explicit isDemo:false so views that check
-        // `r.isDemo !== false` never mislabel backend data as demo.
-        records = data.map((r) => ({ ...r, isDemo: false }));
+        // Preserve each record's own flag: seeded/demo rows from the backend
+        // must not be relabelled as live model results here.
+        records = data.map((r) => ({ ...r, isDemo: r.isDemo === true }));
       }
     } catch (err) {
       // Fallback

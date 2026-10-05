@@ -31,11 +31,25 @@ export default function YieldPredictionView({
   onNavigateToRecommendations,
   onStartNewAnalysis 
 }) {
-  // Sensitivity Simulator State
-  const [simBudHealth, setSimBudHealth] = useState(78);
+  // Sensitivity Simulator State — seeded from the plot's MEASURED bud health
+  // when a real prediction exists, so the page never opens on a 78% assumption.
+  const actualBudHealth = predictionData?.factors?.budHealth?.percentage;
+  const [simBudHealthRaw, setSimBudHealth] = useState(null);
+  const [sliderTouched, setSliderTouched] = useState(false);
   const [simRainfall, setSimRainfall] = useState('Moderate');
   const [simPestControl, setSimPestControl] = useState(true);
   const [simMandiPricePerKg, setSimMandiPricePerKg] = useState(55); // ₹55/kg average Alphonso
+
+  useEffect(() => {
+    if (!sliderTouched && Number.isFinite(actualBudHealth)) {
+      setSimBudHealth(actualBudHealth);
+    }
+  }, [actualBudHealth, sliderTouched]);
+  const simBudHealth = Number.isFinite(simBudHealthRaw)
+    ? simBudHealthRaw
+    : Number.isFinite(actualBudHealth)
+    ? actualBudHealth
+    : 78;
 
   // Plot acreage derived from the latest prediction (fallback: demo 2.5 acres)
   const plotAcres =
@@ -43,9 +57,12 @@ export default function YieldPredictionView({
       ? +(predictionData.totalPlotExpectedMin / predictionData.expectedYieldMin).toFixed(1)
       : 2.5;
   const benchmark = predictionData?.benchmark || {};
-  const benchmarkRegional = benchmark.regionalBenchmark || 4.5;
-  const benchmarkLastYear = benchmark.farmLastYearYield || 4.5;
-  const differenceFromLastYear = benchmark.differenceFromLastYear || '+13.3%';
+  // No fabricated benchmark fallbacks: the backend stores a benchmark only
+  // when real reference data exists, otherwise these stay null and the UI
+  // omits them instead of printing 4.5 / +13.3%.
+  const benchmarkRegional = benchmark.regionalBenchmark ?? null;
+  const benchmarkLastYear = benchmark.farmLastYearYield ?? null;
+  const differenceFromLastYear = benchmark.differenceFromLastYear ?? null;
   const factors = predictionData?.factors || {};
 
   // Offline fallback calculation (kept per spec) — used when the simulate API
@@ -104,11 +121,30 @@ export default function YieldPredictionView({
   const estRevenueMin = Math.round(dynamicYield.expectedYieldMin * plotAcres * 1000 * simMandiPricePerKg);
   const estRevenueMax = Math.round(dynamicYield.expectedYieldMax * plotAcres * 1000 * simMandiPricePerKg);
 
+  // Scenario bars are DERIVED from this run's actual average (or omitted) —
+  // never fixed 3.8 / 5.8 numbers presented as measurements.
+  const currentAvg = dynamicYield.expectedYieldAverage;
+  const hasAvg = Number.isFinite(currentAvg);
+  const fmtT = (v) => ({ yield: +v.toFixed(1), label: `${v.toFixed(1)} t/ac` });
   const scenarioData = [
-    { scenario: 'Severe Drop', yield: 3.8, label: '3.8 t/ac', fill: '#f87171' },
-    { scenario: 'Baseline Avg', yield: benchmarkLastYear, label: `${benchmarkLastYear} t/ac`, fill: '#94a3b8' },
-    { scenario: 'Predicted (Current)', yield: dynamicYield.expectedYieldAverage, label: `${dynamicYield.expectedYieldMin}–${dynamicYield.expectedYieldMax} t/ac`, fill: '#15803d', isCurrent: true },
-    { scenario: 'Optimal Care', yield: 5.8, label: '5.8 t/ac', fill: '#10b981' }
+    ...(hasAvg
+      ? [{ scenario: 'Severe Drop', ...fmtT(currentAvg * 0.75), fill: '#f87171' }]
+      : []),
+    ...(benchmarkLastYear != null
+      ? [{ scenario: 'Baseline Avg', yield: benchmarkLastYear, label: `${benchmarkLastYear} t/ac`, fill: '#94a3b8' }]
+      : []),
+    ...(hasAvg && Number.isFinite(dynamicYield.expectedYieldMin)
+      ? [{
+          scenario: 'Predicted (Current)',
+          yield: currentAvg,
+          label: `${dynamicYield.expectedYieldMin}–${dynamicYield.expectedYieldMax} t/ac`,
+          fill: '#15803d',
+          isCurrent: true
+        }]
+      : []),
+    ...(hasAvg
+      ? [{ scenario: 'Optimal Care', ...fmtT(currentAvg * 1.2), fill: '#10b981' }]
+      : [])
   ];
 
   const isDemoPrediction = !predictionData || predictionData.isDemo !== false;
@@ -189,7 +225,8 @@ export default function YieldPredictionView({
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span>
-                Variety: <strong>{predictionData?.variety || 'Alphonso (Hapus)'}</strong> • Regional Benchmark Avg: {benchmarkRegional} t/acre
+                Variety: <strong>{predictionData?.variety || 'Alphonso (Hapus)'}</strong>
+                {benchmarkRegional != null ? ` • Regional Benchmark Avg: ${benchmarkRegional} t/acre` : ''}
               </span>
             </div>
           </div>
@@ -200,9 +237,11 @@ export default function YieldPredictionView({
               <h4 className="font-bold text-xs sm:text-sm text-slate-900 font-display">
                 Yield Scenarios & Variety Benchmark
               </h4>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                {differenceFromLastYear} vs Last Year
-              </span>
+              {differenceFromLastYear != null ? (
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                  {differenceFromLastYear} vs Last Year
+                </span>
+              ) : null}
             </div>
 
             <div className="w-full h-44">
@@ -214,7 +253,9 @@ export default function YieldPredictionView({
                     formatter={(val) => [`${val} tonnes/acre`, 'Yield']}
                     contentStyle={{ borderRadius: '8px', fontSize: '11px' }}
                   />
-                  <ReferenceLine y={benchmarkLastYear} stroke="#64748b" strokeDasharray="3 3" label={{ value: 'Avg', fill: '#64748b', fontSize: 10, position: 'insideTopRight' }} />
+                  {benchmarkLastYear != null && (
+                    <ReferenceLine y={benchmarkLastYear} stroke="#64748b" strokeDasharray="3 3" label={{ value: 'Avg', fill: '#64748b', fontSize: 10, position: 'insideTopRight' }} />
+                  )}
                   <Bar dataKey="yield" radius={[6, 6, 0, 0]} barSize={28}>
                     {scenarioData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -249,14 +290,18 @@ export default function YieldPredictionView({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">1. Bud Health</span>
               <span className="text-xs font-bold text-emerald-700 bg-white px-2 py-0.5 rounded shadow-2xs">
-                {factors.budHealth?.value || '78% Healthy'}
+                {factors.budHealth?.value || (isDemoPrediction ? '78% Healthy' : 'Not recorded')}
               </span>
             </div>
             <div className="text-sm font-extrabold text-slate-900">
-              High Panicle Density
+              {factors.budHealth?.percentage != null
+                ? `${factors.budHealth.percentage}% Good-Yield Samples`
+                : 'Not recorded'}
             </div>
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              Vigorous floral clusters detected across {factors.budHealth?.percentage ?? 78}% of canopy samples, contributing strongly to base yield.
+              {factors.budHealth?.percentage != null
+                ? `${factors.budHealth.percentage}% of analysed samples were classified Good Yield Potential by the CNN, and this score drives the base yield estimate.`
+                : 'No bud-health score was stored for this estimate.'}
             </p>
           </div>
 
@@ -272,7 +317,11 @@ export default function YieldPredictionView({
               Anthesis Window
             </div>
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              29°C average temperature promotes active pollinator foraging with minimal thermal desiccation.
+              {factors.climate?.value
+                ? `${factors.climate.value} for this plot at analysis time.`
+                : predictionData?.climateSource === 'live_weather'
+                ? 'Live weather readings were fused into this estimate.'
+                : 'Climate inputs came from the ML service defaults — live weather was unavailable (WEATHER_PROVIDER=mock).'}
             </p>
           </div>
 
@@ -297,14 +346,15 @@ export default function YieldPredictionView({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">4. Pest Risk</span>
               <span className="text-xs font-bold text-slate-700 bg-white px-2 py-0.5 rounded shadow-2xs">
-                {factors.pestRisk?.value || 'Low–Moderate'}
+                {factors.pestRisk?.value || 'Not estimated'}
               </span>
             </div>
             <div className="text-sm font-extrabold text-slate-900">
-              Mango Hopper Presence
+              Not Modelled
             </div>
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              Early hopper nymphs spotted on 1 of 4 sample clusters. Prompt treatment secures the upper yield band.
+              The trained model is a binary bud-health classifier — it cannot detect hoppers
+              or mildew, so no pest estimate is produced for this analysis.
             </p>
           </div>
         </div>
@@ -336,12 +386,19 @@ export default function YieldPredictionView({
               min="50"
               max="95"
               value={simBudHealth}
-              onChange={(e) => setSimBudHealth(Number(e.target.value))}
+              onChange={(e) => {
+                setSliderTouched(true);
+                setSimBudHealth(Number(e.target.value));
+              }}
               className="w-full accent-[#155e34] cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-slate-400">
               <span>50% (Poor)</span>
-              <span>78% (Actual)</span>
+              <span>
+                {factors.budHealth?.percentage != null
+                  ? `${factors.budHealth.percentage}% (Actual)`
+                  : 'Actual (not recorded)'}
+              </span>
               <span>95% (Peak)</span>
             </div>
           </div>
@@ -410,7 +467,9 @@ export default function YieldPredictionView({
 
           <button
             onClick={() => {
-              setSimBudHealth(78);
+              // Reset back to the MEASURED bud health (78 only if none stored)
+              setSliderTouched(false);
+              setSimBudHealth(null);
               setSimRainfall('Moderate');
               setSimPestControl(true);
             }}

@@ -63,8 +63,11 @@ export default function RecommendationsView({ recommendations = [], overallRisk,
     'Farm health is good, but upcoming rainfall variations require proactive fungal prophylaxis.';
 
   const handleShareWhatsApp = () => {
+    // Share text is built from the REAL loaded advisories — never a literal
+    // 78% / 4.8-5.4 t/acre payload unrelated to this plot.
+    const topAction = filtered[0]?.title || recs[0]?.title || 'No active advisories for this plot';
     const text = encodeURIComponent(
-      `🌾 *MangoSense Crop Advisory (Plot A)*\n• *Overall Risk:* Moderate\n• *Top Action:* Maintain light drip irrigation & apply sulphur spray before 27 Aug rain.\n• *Bud Health:* 78% Healthy.\n• *Expected Yield:* 4.8 - 5.4 tonnes/acre.`
+      `🌾 *MangoSense Crop Advisory*\n• *Overall Risk:* ${riskLevel}\n• *Top Action:* ${topAction}\n• *Advisories:* ${recs.length}\n• *Generated:* ${new Date().toLocaleDateString()}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };

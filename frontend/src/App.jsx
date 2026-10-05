@@ -76,7 +76,20 @@ function AppShell() {
     };
 
     mockFarmService.getFarms().then(res => {
-      if (res && res.length > 0) setFarms(res);
+      if (res && res.length > 0) {
+        setFarms(res);
+        // Reconcile the selection with the loaded list. State starts on demo
+        // ids ('farm-1'); when the backend returns real farms with ObjectId
+        // ids, keeping 'farm-1' would post farmId=farm-1 on every analysis and
+        // the run would never attach to (or update) the real farm record.
+        const nextFarm = res.some(f => f.id === selectedFarm) ? selectedFarm : res[0].id;
+        setSelectedFarm(nextFarm);
+        const farmObj = res.find(f => f.id === nextFarm);
+        const plotIds = (farmObj?.plots || []).map(p => p.id);
+        if (plotIds.length > 0 && !plotIds.includes(selectedPlot)) {
+          setSelectedPlot(plotIds[0]);
+        }
+      }
     }).finally(done);
     mockClimateService.getCurrentWeather().then(res => {
       if (res && res.temperature !== undefined) setWeather(res);
@@ -113,6 +126,23 @@ function AppShell() {
     if (data?.result) {
       if (data.result.images) setAnalysisImages(data.result.images);
       setAnalysisResult(data.result);
+    }
+    // The run has just been persisted server-side — refetch everything it
+    // changed so History, Dashboard, Yield Prediction and Recommendations show
+    // the real result without a page reload (spec §18/§23/§24).
+    if (!demoMode) {
+      mockHistoryService.getHistory().then(res => {
+        if (res && res.length > 0) setHistory(res);
+      });
+      mockPredictionService.getLatestPrediction(data?.plotId || selectedPlot).then(res => {
+        if (res) setPredictionData(res);
+      });
+      mockRecommendationService.getRecommendations().then(res => {
+        if (res && res.length > 0) setRecommendations(res);
+      });
+      mockFarmService.getFarms().then(res => {
+        if (res && res.length > 0) setFarms(res);
+      });
     }
     setActiveTab('image-analysis');
   };

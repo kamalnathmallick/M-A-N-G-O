@@ -8,17 +8,18 @@ const historyRecordSchema = new mongoose.Schema(
       index: true
     },
     farmId: { type: String, default: 'farm-1', index: true },
-    plot: { type: String, default: 'Plot A' },
-    farmName: { type: String, default: 'Green Valley Mango Farm' },
-    plotDetails: { type: String, default: 'Plot A — 2.5 acres (Alphonso)' },
+    plot: { type: String, default: '' },
+    farmName: { type: String, default: '' },
+    plotDetails: { type: String, default: '' },
     season: { type: String, default: '', index: true },
     date: { type: String, required: true },
-    time: { type: String, default: '09:30 AM' },
-    budHealth: { type: Number, default: 78 },
-    healthyBudsText: { type: String, default: '78%' },
+    time: { type: String, default: '' },
+    // No fabricated defaults: an absent measurement must stay absent.
+    budHealth: { type: Number, default: null },
+    healthyBudsText: { type: String, default: '' },
 
     // Risk values
-    flowerDropRisk: { type: String, default: 'Moderate' },
+    flowerDropRisk: { type: String, default: 'Unknown' },
     riskBadgeColor: { type: String, default: 'amber' },
     climateCondition: { type: String, default: 'Unknown' },
 
@@ -45,10 +46,10 @@ const historyRecordSchema = new mongoose.Schema(
     totalPlotExpectedMin: { type: Number, default: null },
     totalPlotExpectedMax: { type: Number, default: null },
     yieldUnit: { type: String, default: 'tonnes / acre' },
-    predictedYield: { type: String, default: '4.8 – 5.4 t/acre' },
-    totalTonnes: { type: String, default: '12.0 – 13.5 t' },
+    predictedYield: { type: String, default: '' },
+    totalTonnes: { type: String, default: '' },
 
-    sampleCount: { type: Number, default: 4 },
+    sampleCount: { type: Number, default: 0 },
     keyObservation: { type: String, default: '' },
 
     // Model versioning (mirrors Prediction.modelVersion)

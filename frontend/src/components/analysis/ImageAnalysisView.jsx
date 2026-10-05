@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
   CheckCircle2, 
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { SAMPLE_BUD_IMAGES } from '../../services/mockImageAnalysisService';
+import { apiClient } from '../../services/apiClient';
 
 export default function ImageAnalysisView({ 
   images = SAMPLE_BUD_IMAGES, 
@@ -25,11 +26,41 @@ export default function ImageAnalysisView({
   onStartNewAnalysis 
 }) {
   const [selectedFilter, setSelectedFilter] = useState('ALL');
+  // Farm-level result of THIS run, fetched from the backend after the batch is
+  // stored. No mock fallback on purpose: if it is unavailable we say so.
+  const [farmResult, setFarmResult] = useState(null);
+  const [advisories, setAdvisories] = useState([]);
+  const [farmResultLoading, setFarmResultLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setFarmResultLoading(true);
+      try {
+        const [prediction, recs] = await Promise.all([
+          apiClient.get('/predictions/latest').catch(() => null),
+          apiClient.get('/recommendations').catch(() => null)
+        ]);
+        if (cancelled) return;
+        setFarmResult(prediction || null);
+        setAdvisories(Array.isArray(recs) ? recs.slice(0, 3) : []);
+      } catch {
+        if (!cancelled) {
+          setFarmResult(null);
+          setAdvisories([]);
+        }
+      } finally {
+        if (!cancelled) setFarmResultLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [images]);
   const [activeModalImage, setActiveModalImage] = useState(null);
 
   // Binary metrics (CONTRACT.md §0: dataset is binary GOOD/BAD;
   // statuses: healthy = Good Yield Potential, everything else = Poor)
-  const total = images.length || 8;
+  const total = images.length;
   const goodList = images.filter(img => img.status === 'healthy');
   const poorList = images.filter(img => img.status && img.status !== 'healthy');
 
@@ -215,7 +246,7 @@ export default function ImageAnalysisView({
                 Flower Drop Risk Analysis
               </h3>
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                {analysisSummary?.flowerDropRisk || 'Moderate'} Risk
+                {analysisSummary?.flowerDropRisk || (isDemo ? 'Moderate' : 'Not available')} Risk
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium mb-4">
@@ -234,7 +265,9 @@ export default function ImageAnalysisView({
                     <span className="text-emerald-700">{goodPercent}% Favorable</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Terminal axis elongation is strong across {goodPercent}% of samples with normal trichome density.
+                    {goodList.length} of {total} sample{total === 1 ? '' : 's'} classified
+                    Good Yield Potential
+                    {avgConfidence !== null ? ` · mean model confidence ${avgConfidence}%` : ''}.
                   </p>
                 </div>
               </div>
@@ -247,10 +280,12 @@ export default function ImageAnalysisView({
                 <div className="flex-1">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-900">
                     <span>2. Pest Activity (Mango Hopper Nymphs)</span>
-                    <span className="text-amber-700">Moderate Presence</span>
+                    <span className="text-slate-500">Not estimated</span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Isolated honeydew secretions detected on south-facing trees. Action advised before full bloom.
+                    The trained model is a binary bud-health classifier (GOOD / BAD). It has
+                    no hopper, mildew or desiccation labels, so pest pressure cannot be
+                    inferred from these photos.
                   </p>
                 </div>
               </div>
@@ -263,15 +298,95 @@ export default function ImageAnalysisView({
                 <div className="flex-1">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-900">
                     <span>3. Climatic & Thermal Stress</span>
-                    <span className="text-sky-700">Low–Moderate</span>
+                    <span className="text-sky-700">
+                      {analysisSummary?.flowerDropRisk || 'Not available'}
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Upcoming 27 Aug & 01 Sep showers may cause sudden humidity swings. Light pre-rain spray recommended.
+                    Produced by the rule engine from the 15-day climate projection — not by
+                    the image model. Yield range and advisories are shown below.
                   </p>
                 </div>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Farm-level outcome of this run (yield + advisories) — shown here so the
+          farmer does not have to navigate elsewhere to see the result */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl p-5 border border-slate-100/90 shadow-xs">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <h3 className="font-bold text-base text-slate-900 font-display">
+              Plot Yield Estimate
+            </h3>
+            {farmResult && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                farmResult.isDemo ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {farmResult.isDemo ? 'Demo Data' : 'Live Model Result'}
+              </span>
+            )}
+          </div>
+
+          {farmResultLoading && !farmResult ? (
+            <p className="text-xs text-slate-400 mt-3">Loading plot estimate…</p>
+          ) : farmResult ? (
+            <div className="mt-3 space-y-2.5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-extrabold text-slate-900 font-display">
+                  {typeof farmResult.expectedYieldMin === 'number' &&
+                  typeof farmResult.expectedYieldMax === 'number'
+                    ? `${farmResult.expectedYieldMin} – ${farmResult.expectedYieldMax}`
+                    : 'Not available'}
+                </span>
+                <span className="text-xs font-semibold text-slate-500">
+                  {farmResult.yieldUnit || 'tonnes / acre'}
+                </span>
+              </div>
+              {typeof farmResult.totalPlotExpectedMin === 'number' && (
+                <p className="text-[11px] text-slate-500">
+                  Whole-plot estimate: {farmResult.totalPlotExpectedMin} –{' '}
+                  {farmResult.totalPlotExpectedMax} {farmResult.totalPlotUnit || 'tonnes total'}
+                </p>
+              )}
+              <p className="text-[11px] text-slate-500">
+                {farmResult.variety} · {farmResult.floweringStage} · season {farmResult.season || '—'}
+              </p>
+              <p className="text-[10px] text-slate-400">
+                Bud model: {farmResult.modelVersion?.budModel || '—'} · yield model:{' '}
+                {farmResult.modelVersion?.yieldModel || '—'}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 mt-3">
+              Plot estimate unavailable — the backend did not return a stored prediction.
+            </p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 border border-slate-100/90 shadow-xs">
+          <h3 className="font-bold text-base text-slate-900 font-display pb-3 border-b border-slate-100">
+            Recommended Actions
+          </h3>
+          {advisories.length === 0 ? (
+            <p className="text-xs text-slate-400 mt-3">
+              No advisories returned for this plot yet.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {advisories.map((rec) => (
+                <li key={rec._id || rec.title} className="flex items-start gap-2">
+                  <ShieldAlert className="w-3.5 h-3.5 mt-0.5 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">{rec.title}</p>
+                    <p className="text-[11px] text-slate-500">{rec.shortText || rec.fullExplanation}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Camera, 
   Upload, 
@@ -16,6 +16,22 @@ import {
   Eye
 } from 'lucide-react';
 import { SAMPLE_BUD_IMAGES, mockImageAnalysisService } from '../../services/mockImageAnalysisService';
+
+// Upload constraints — the backend accepts at most 10 images per analysis and
+// the ML quality gate works on JPEG/PNG only.
+const MAX_SAMPLES = 10;
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const ACCEPTED_EXT = ['.jpg', '.jpeg', '.png'];
+const ACCEPT_ATTR = '.jpg,.jpeg,.png,image/jpeg,image/png';
+
+const fileExtension = (name = '') => {
+  const dot = name.lastIndexOf('.');
+  return dot === -1 ? '' : name.slice(dot).toLowerCase();
+};
+
+const revokeSampleUrl = (img) => {
+  if (img?.isObjectUrl && img?.url) URL.revokeObjectURL(img.url);
+};
 
 export default function NewAnalysisWizard({ 
   farms, 
@@ -37,16 +53,29 @@ export default function NewAnalysisWizard({
   const [season, setSeason] = useState(`${new Date().getFullYear()}`);
   const [analysisDate, setAnalysisDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Image Samples State
-  const [selectedImages, setSelectedImages] = useState(SAMPLE_BUD_IMAGES);
+  // Image Samples State — starts EMPTY. Samples are either real uploads (pending
+  // until the backend classifies them) or demo samples the farmer adds on
+  // purpose, which are labelled "Demo sample" and never carry a fake result.
+  const [selectedImages, setSelectedImages] = useState([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStepLabel, setAnalysisStepLabel] = useState('');
   const [analysisError, setAnalysisError] = useState(null);
+  const [uploadNotice, setUploadNotice] = useState(null);
   const [previewModalImage, setPreviewModalImage] = useState(null);
 
   const fileInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  // Release blob URLs when the wizard unmounts so previews don't leak.
+  const samplesRef = useRef(selectedImages);
+  samplesRef.current = selectedImages;
+  useEffect(() => () => {
+    samplesRef.current.forEach(revokeSampleUrl);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+  }, []);
 
   // Handle variety choices
   const varieties = [
@@ -73,47 +102,173 @@ export default function NewAnalysisWizard({
     const newSample = {
       ...SAMPLE_BUD_IMAGES[nextIndex],
       id: `sample-${Date.now()}-${selectedImages.length + 1}`,
-      title: `Panicle Sample #${selectedImages.length + 1}`
+      title: `Panicle Sample #${selectedImages.length + 1}`,
+      // Bundled artwork is NOT a model result — label it as a demo sample.
+      classification: 'Demo sample',
+      status: 'demo',
+      confidence: null,
+      detectedBuds: null,
+      healthyBuds: null,
+      affectedBuds: null,
+      notes: 'Bundled demo artwork — not analysed by the model.',
+      isObjectUrl: false
     };
     setSelectedImages([...selectedImages, newSample]);
   };
 
-  // Remove image
+  // Remove image (and release its blob URL)
   const handleRemoveImage = (id) => {
+    const target = selectedImages.find((img) => img.id === id);
+    revokeSampleUrl(target);
     setSelectedImages(selectedImages.filter(img => img.id !== id));
   };
 
-  // Handle simulated file upload
-  const handleFileUpload = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  /**
+   * Validate + register real image files as analysis samples.
+   * Shared by the file picker and the camera capture.
+   * A sample carries NO classification until the backend returns a real one —
+   * pre-filling confidence/bud counts here would be fabricated ML output.
+   */
+  const addFiles = (incoming) => {
+    const files = Array.from(incoming || []);
+    if (files.length === 0) {
+      setUploadNotice({ type: 'error', text: 'Please upload at least one flower-bud image.' });
+      return;
+    }
 
-    const newItems = files.map((file, idx) => ({
-      id: `upload-${Date.now()}-${idx}`,
-      url: URL.createObjectURL(file),
-      fallbackUrl: URL.createObjectURL(file),
-      title: file.name.slice(0, 20) || `Uploaded Sample #${selectedImages.length + idx + 1}`,
-      stage: floweringStage,
-      classification: 'Healthy Bud',
-      confidence: 88.5,
-      status: 'healthy',
-      detectedBuds: 40,
-      healthyBuds: 34,
-      affectedBuds: 6,
-      notes: 'Captured via camera/upload.',
-      rawFile: file
-    }));
+    const rejected = [];
+    const accepted = [];
+    let room = MAX_SAMPLES - selectedImages.length;
 
-    setSelectedImages([...selectedImages, ...newItems]);
+    for (const file of files) {
+      if (room <= 0) {
+        rejected.push(`${file.name}: sample limit reached (max ${MAX_SAMPLES})`);
+        continue;
+      }
+      const ext = fileExtension(file.name);
+      const typeOk = ACCEPTED_EXT.includes(ext) || ['image/jpeg', 'image/png'].includes(file.type);
+      if (!typeOk) {
+        rejected.push(`${file.name}: unsupported image format (use JPG, JPEG or PNG)`);
+        continue;
+      }
+      if (file.size === 0) {
+        rejected.push(`${file.name}: file is empty`);
+        continue;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        rejected.push(`${file.name}: larger than 10 MB`);
+        continue;
+      }
+      const duplicate = selectedImages.some(
+        (img) => img.rawFile && img.rawFile.name === file.name && img.rawFile.size === file.size
+      );
+      if (duplicate) {
+        rejected.push(`${file.name}: already added`);
+        continue;
+      }
+      accepted.push(file);
+      room -= 1;
+    }
+
+    if (accepted.length > 0) {
+      const stamp = Date.now();
+      const newItems = accepted.map((file, idx) => ({
+        id: `upload-${stamp}-${idx}`,
+        url: URL.createObjectURL(file),
+        isObjectUrl: true,
+        title: file.name.slice(0, 20) || `Uploaded Sample #${selectedImages.length + idx + 1}`,
+        stage: floweringStage,
+        // Canopy direction is captured per sample so North/South/East/West
+        // samples stay distinguishable in the analysis request.
+        canopyDirection,
+        // Pending: the real label/confidence arrive from the backend response.
+        classification: 'Pending analysis',
+        confidence: null,
+        status: 'pending',
+        detectedBuds: null,
+        healthyBuds: null,
+        affectedBuds: null,
+        notes: 'Awaiting real model analysis.',
+        rawFile: file,
+        sizeBytes: file.size,
+        analysisDate
+      }));
+      setSelectedImages([...selectedImages, ...newItems]);
+    }
+
+    if (rejected.length > 0) {
+      setUploadNotice({ type: 'error', text: rejected.join(' · ') });
+    } else if (accepted.length > 0) {
+      setUploadNotice({
+        type: 'info',
+        text: `${accepted.length} image${accepted.length > 1 ? 's' : ''} ready for analysis.`
+      });
+    }
   };
 
-  // Simulate Camera snapshot
-  const handleSimulateCameraCapture = () => {
-    setCameraActive(true);
-    setTimeout(() => {
-      handleAddDemoSample();
-      setCameraActive(false);
-    }, 900);
+  // Handle file upload
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-selecting the same file
+    addFiles(files);
+  };
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraActive(false);
+  }, []);
+
+  // Real camera capture. Falls back to the file picker when the device or the
+  // browser does not expose a camera, so the flow is never blocked.
+  const handleCameraCapture = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setUploadNotice({ type: 'error', text: 'Camera not available here — use Upload Photos instead.' });
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      setUploadNotice(null);
+      setCameraActive(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      streamRef.current = stream;
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        video.playsInline = true;
+        await video.play().catch(() => {});
+      }
+    } catch {
+      stopCamera();
+      setUploadNotice({ type: 'error', text: 'Camera permission denied or unavailable — use Upload Photos instead.' });
+    }
+  };
+
+  const handleCaptureFrame = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      stopCamera();
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const file = new File([blob], `canopy-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          addFiles([file]);
+        }
+        stopCamera();
+      },
+      'image/jpeg',
+      0.92
+    );
   };
 
   // Run AI Analysis — progress is driven by the REAL request lifecycle:
@@ -121,7 +276,10 @@ export default function NewAnalysisWizard({
   // actual upload/inference milestones. Backend failures surface an error
   // instead of silently returning simulated results.
   const handleRunAnalysis = async () => {
-    if (selectedImages.length === 0) return;
+    if (selectedImages.length === 0) {
+      setUploadNotice({ type: 'error', text: 'Please upload at least one flower-bud image.' });
+      return;
+    }
 
     const hasRealFiles = selectedImages.some((img) => img.rawFile instanceof File);
 
@@ -160,7 +318,9 @@ export default function NewAnalysisWizard({
           variety: mangoVariety,
           floweringStage,
           canopyDirection,
-          season
+          season,
+          analysisDate,
+          plotArea: farmArea
         }
       );
 
@@ -451,16 +611,16 @@ export default function NewAnalysisWizard({
 
         {/* 2 Large Action Buttons: Take Photos & Upload Photos */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Action 1: Take Photos (Camera Simulation) */}
+          {/* Action 1: Take Photos (real device camera) */}
           <button
-            onClick={handleSimulateCameraCapture}
+            onClick={handleCameraCapture}
             className="flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-emerald-300/80 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-400 transition-all text-center group cursor-pointer"
           >
             <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-700/20 group-hover:scale-105 transition-transform mb-3">
               <Camera className="w-7 h-7" />
             </div>
             <h4 className="font-bold text-base text-emerald-950 font-display">
-              {cameraActive ? 'Capturing High-Res Frame...' : 'Take Photos'}
+              {cameraActive ? 'Camera Open — Capture Frame' : 'Take Photos'}
             </h4>
             <p className="text-xs text-emerald-800/80 mt-1 max-w-xs">
               Use mobile camera to snap flower panicles directly in the field.
@@ -479,7 +639,7 @@ export default function NewAnalysisWizard({
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*"
+              accept={ACCEPT_ATTR}
               className="hidden"
               onChange={handleFileUpload}
             />
@@ -497,6 +657,20 @@ export default function NewAnalysisWizard({
             </span>
           </div>
         </div>
+
+        {/* Upload validation feedback */}
+        {uploadNotice && (
+          <div className={`rounded-xl border p-3 flex items-start gap-2.5 text-xs ${
+            uploadNotice.type === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}>
+            {uploadNotice.type === 'error'
+              ? <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              : <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />}
+            <span className="font-medium">{uploadNotice.text}</span>
+          </div>
+        )}
 
         {/* Farmer Photography Guidance Card */}
         <div className="rounded-xl bg-amber-50/70 border border-amber-200/70 p-3.5 flex items-start gap-3 text-xs text-amber-900">
@@ -557,7 +731,11 @@ export default function NewAnalysisWizard({
 
                   <div className="text-left">
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded inline-block ${
-                      img.status === 'healthy' 
+                      img.status === 'pending'
+                        ? 'bg-slate-500 text-white'
+                        : img.status === 'demo'
+                        ? 'bg-indigo-500 text-white'
+                        : img.status === 'healthy' 
                         ? 'bg-emerald-600 text-white' 
                         : img.status === 'diseased'
                         ? 'bg-purple-600 text-white'
@@ -599,6 +777,35 @@ export default function NewAnalysisWizard({
           </button>
         </div>
       </div>
+
+      {/* Live camera capture overlay (only when a real camera stream is open) */}
+      {cameraActive && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl overflow-hidden bg-slate-900 border border-slate-700 shadow-2xl">
+            <div className="relative aspect-video bg-black">
+              <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+              <div className="absolute inset-0 border-[6px] border-emerald-500/70 pointer-events-none" />
+              <div className="absolute top-3 left-3 text-[11px] font-bold text-white bg-black/60 px-2 py-1 rounded">
+                {canopyDirection} canopy
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 p-4">
+              <button
+                onClick={stopCamera}
+                className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCaptureFrame}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-900/40 transition-colors"
+              >
+                <Camera className="w-4 h-4" /> Capture frame
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -23,11 +23,39 @@ export default function DashboardView({
   const currentFarm = farms.find(f => f.id === selectedFarm) || farms[0];
   const currentPlot = currentFarm?.plots.find(p => p.id === selectedPlot) || currentFarm?.plots[0];
 
+  // Newest REAL run from MongoDB that belongs to THIS farm+plot (history is
+  // refetched after every analysis in App.jsx). Falls back to the plot's own
+  // summary only when no real run exists for this plot.
+  const latestRealRun = (history || []).find(
+    (r) =>
+      r.isDemo === false &&
+      r.farmId === currentFarm?.id &&
+      r.plot === String(currentPlot?.id || '').toUpperCase()
+  );
+  // Cards fed by the run itself (yield/health/drop-risk are written back to the
+  // plot after a real analysis) may claim "Live Model Result" only when such a
+  // run exists for THIS plot and the farms endpoint is actually answering.
+  // Card 4 (climateRisk) is never written by an analysis, so it keeps dataBadge.
+  const analysisData = latestRealRun
+    ? {
+        lastAnalysisDate:
+          [latestRealRun.date, latestRealRun.time].filter(Boolean).join(', ') || null,
+        sampleCount: latestRealRun.sampleCount ?? null,
+        confidence: latestRealRun.confidence ?? null,
+        floweringStage: currentPlot?.floweringStage || 'Active',
+        healthScore: latestRealRun.budHealth ?? currentPlot?.healthScore ?? null,
+        flowerDropRisk: latestRealRun.flowerDropRisk || currentPlot?.flowerDropRisk,
+        climateRisk: latestRealRun.climateCondition || currentPlot?.climateRisk
+      }
+    : currentPlot;
+
   // Data-driven badges: only call isEndpointLive at render (never in effects/callbacks).
   // Honest on both counts: the endpoint must have answered AND the payload must
   // not be flagged isDemo (the backend serves 200 + demo farms while MongoDB is offline).
   const farmsLive = isEndpointLive('farms');
   const dataBadge = farmsLive && currentFarm?.isDemo === false ? 'Live Model Result' : 'Demo Data';
+  const plotRunBadge =
+    farmsLive && latestRealRun ? 'Live Model Result' : dataBadge;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -36,9 +64,9 @@ export default function DashboardView({
         {/* Card 1: Expected Yield */}
         <StatCard
           title="Expected Yield"
-          value={currentPlot?.expectedYield || '4.8 – 5.4'}
+          value={currentPlot?.expectedYield ?? '—'}
           subtitle={currentPlot?.yieldUnit || 'tonnes / acre'}
-          badgeText={dataBadge}
+          badgeText={plotRunBadge}
           badgeType="success"
           type="yield"
           onClick={() => onNavigate('yield')}
@@ -47,9 +75,9 @@ export default function DashboardView({
         {/* Card 2: Bud Health */}
         <StatCard
           title="Bud Health"
-          value={`${currentPlot?.healthScore || 78}%`}
+          value={currentPlot?.healthScore != null ? `${currentPlot.healthScore}%` : '—'}
           subtitle="Healthy Buds"
-          badgeText={dataBadge}
+          badgeText={plotRunBadge}
           badgeType="default"
           type="bud"
           onClick={() => onNavigate('image-analysis')}
@@ -58,9 +86,9 @@ export default function DashboardView({
         {/* Card 3: Flower Drop Risk */}
         <StatCard
           title="Flower Drop Risk"
-          value={currentPlot?.flowerDropRisk || 'Moderate'}
+          value={currentPlot?.flowerDropRisk ?? '—'}
           subtitle="Keep monitoring"
-          badgeText={dataBadge}
+          badgeText={plotRunBadge}
           badgeType="warning"
           type="risk"
           onClick={() => onNavigate('recommendations')}
@@ -69,7 +97,7 @@ export default function DashboardView({
         {/* Card 4: Climate Risk */}
         <StatCard
           title="Climate Risk"
-          value={currentPlot?.climateRisk || 'Low - Moderate'}
+          value={currentPlot?.climateRisk ?? '—'}
           subtitle="Favorable Conditions"
           badgeText={dataBadge}
           badgeType="info"
@@ -85,7 +113,10 @@ export default function DashboardView({
           <LatestAnalysisCard
             onStartAnalysis={() => onNavigate('new-analysis')}
             onViewDetailedClassification={() => onNavigate('image-analysis')}
-            analysisData={currentPlot}
+            analysisData={analysisData}
+            // Demo fallbacks (fixed date/94.2%/4 samples) are only allowed when
+            // no real run exists; a real record must never be padded with them.
+            isDemoData={!latestRealRun}
           />
         </div>
 

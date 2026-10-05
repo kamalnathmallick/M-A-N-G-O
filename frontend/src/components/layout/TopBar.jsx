@@ -36,7 +36,19 @@ export default function TopBar({
     setSpeaking(true);
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      const text = `Namaste Farmer! For ${currentPlotObj?.name || 'Plot A'}, bud health is 78 percent healthy. Expected yield is 4.8 to 5.4 tonnes per acre. Weather is favorable at 29 degrees Celsius. Please maintain light drip irrigation and monitor for hoppers before the upcoming rain.`;
+      const text = `Namaste Farmer! For ${currentPlotObj?.name || 'this plot'}, ${
+        currentPlotObj?.healthScore != null
+          ? `bud health is ${currentPlotObj.healthScore} percent healthy`
+          : 'bud health has not been measured yet'
+      }. ${
+        currentPlotObj?.expectedYield
+          ? `Expected yield is ${currentPlotObj.expectedYield} tonnes per acre.`
+          : 'No yield estimate is stored yet.'
+      } ${
+        weather?.temperature != null
+          ? `Weather is ${weather.condition ? weather.condition.toLowerCase() : 'moderate'} at ${weather.temperature} degrees Celsius.`
+          : 'Live weather is unavailable right now.'
+      } Please maintain light drip irrigation and monitor the canopy regularly.`;
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.95;
       utterance.onend = () => setSpeaking(false);

@@ -277,7 +277,7 @@ state) it falls back to stratified splitting — stated openly in
 
 | Method | Endpoint | Purpose |
 | :--- | :--- | :--- |
-| POST | `/api/predictions/bud` | Multipart, up to 10 images (`images[]`, `farmId`, `plotId`, `variety`, `floweringStage`, `canopyDirection`, `season`) → ML quality gate + CNN; zero files → 400 |
+| POST | `/api/predictions/bud` | Multipart, up to 10 files under the `images` field (optional `farmId`, `plotId`, `variety`, `floweringStage`, `canopyDirection`, `season`) → ML quality gate + CNN; zero files → 400 |
 | GET | `/api/predictions/latest?plotId` | Latest yield & bud analysis for a plot |
 | POST | `/api/predictions/simulate` | Live "What-if" sensitivity recalculation |
 

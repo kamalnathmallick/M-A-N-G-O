@@ -24,100 +24,103 @@ const predictionSchema = new mongoose.Schema(
     },
     plotName: {
       type: String,
-      default: 'Plot A — 2.5 acres'
+      default: ''
     },
     variety: {
       type: String,
-      default: 'Alphonso (Hapus)'
+      default: ''
     },
     floweringStage: {
       type: String,
-      default: 'Panicle Elongation & Bloom'
+      default: ''
     },
     predictionLabel: {
       type: String,
-      default: 'Prototype Prediction'
+      default: ''
     },
     confidenceNote: {
       type: String,
-      default: 'Estimation based on multi-sample bud classification and 15-day climate projection.'
+      default: ''
+    },
+    // Date the farmer ran the analysis in the field (from the wizard).
+    analysisDate: {
+      type: Date
+    },
+    // Where the climate inputs for the yield estimate came from:
+    // 'live_weather' | 'service_defaults' | 'not_used'.
+    climateSource: {
+      type: String
     },
 
-    // Yield Metrics
+    // Yield Metrics — populated ONLY from a real inference response.
+    // No defaults: a missing number must stay missing, never become 4.8.
     expectedYieldMin: {
-      type: Number,
-      required: true,
-      default: 4.8
+      type: Number
     },
     expectedYieldMax: {
-      type: Number,
-      required: true,
-      default: 5.4
+      type: Number
     },
     expectedYieldAverage: {
-      type: Number,
-      required: true,
-      default: 5.1
+      type: Number
     },
     yieldUnit: {
       type: String,
       default: 'tonnes / acre'
     },
     totalPlotExpectedMin: {
-      type: Number,
-      default: 12.0
+      type: Number
     },
     totalPlotExpectedMax: {
-      type: Number,
-      default: 13.5
+      type: Number
     },
     totalPlotUnit: {
       type: String,
       default: 'tonnes total'
     },
 
-    // Factors
+    // Factors — `label` is presentation only; every metric below is filled
+    // from the ML response or left absent.
     factors: {
       budHealth: {
         label: { type: String, default: 'Bud Health' },
-        value: { type: String, default: '78% healthy' },
-        percentage: { type: Number, default: 78 },
-        impact: { type: String, default: '+18% vs poor bud baseline' },
-        status: { type: String, default: 'favorable' },
-        badge: { type: String, default: 'High Quality Panicles' }
+        value: { type: String },
+        percentage: { type: Number },
+        impact: { type: String },
+        status: { type: String },
+        badge: { type: String }
       },
       climate: {
         label: { type: String, default: 'Climate Condition' },
-        value: { type: String, default: 'Favorable' },
-        percentage: { type: Number, default: 82 },
-        impact: { type: String, default: '+12% optimal anthesis window' },
-        status: { type: String, default: 'favorable' },
-        badge: { type: String, default: 'Optimal Temperature' }
+        value: { type: String },
+        percentage: { type: Number },
+        impact: { type: String },
+        status: { type: String },
+        badge: { type: String }
       },
       flowerDropRisk: {
         label: { type: String, default: 'Flower Drop Risk' },
-        value: { type: String, default: 'Moderate' },
-        percentage: { type: Number, default: 35 },
-        impact: { type: String, default: '-9% potential yield loss if untreated' },
-        status: { type: String, default: 'warning' },
-        badge: { type: String, default: 'Monitor Rain & Wind' }
+        value: { type: String },
+        percentage: { type: Number },
+        impact: { type: String },
+        status: { type: String },
+        badge: { type: String }
       },
       pestRisk: {
         label: { type: String, default: 'Pest Risk' },
-        value: { type: String, default: 'Low – Moderate' },
-        percentage: { type: Number, default: 22 },
-        impact: { type: String, default: '-4% localized hopper pressure' },
-        status: { type: String, default: 'favorable' },
-        badge: { type: String, default: 'Early Stage Detected' }
+        value: { type: String },
+        percentage: { type: Number },
+        impact: { type: String },
+        status: { type: String },
+        badge: { type: String }
       }
     },
 
-    // Benchmark
+    // Benchmark — only meaningful when a real reference dataset exists.
     benchmark: {
-      varietyHistoricalAverage: { type: Number, default: 4.6 },
-      farmLastYearYield: { type: Number, default: 4.5 },
-      regionalBenchmark: { type: Number, default: 4.2 },
-      differenceFromLastYear: { type: String, default: '+13.3%' }
+      varietyHistoricalAverage: { type: Number },
+      farmLastYearYield: { type: Number },
+      regionalBenchmark: { type: Number },
+      differenceFromLastYear: { type: String }
     },
 
     // Scenarios & Distribution

@@ -6,7 +6,9 @@ export const mockPredictionService = {
     try {
       const data = await apiClient.get(`/predictions/latest?plotId=${plotId}`);
       if (data && data.expectedYieldMin !== undefined) {
-        return { ...data, isDemo: false };
+        // Keep the backend's flag: a stored demo/heuristic prediction must not
+        // be relabelled "Live Model Result" by the frontend.
+        return { ...data, isDemo: data.isDemo === true };
       }
     } catch (err) {
       // Fallback
@@ -112,7 +114,7 @@ export const mockPredictionService = {
         plotAcres
       });
       if (data && data.expectedYieldAverage !== undefined) {
-        return { ...data, isDemo: false };
+        return { ...data, isDemo: data.isDemo === true };
       }
       throw new Error('The server returned an invalid simulation response.');
     } catch (err) {

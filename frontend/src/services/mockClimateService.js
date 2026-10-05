@@ -45,7 +45,9 @@ export const mockClimateService = {
     try {
       const data = await apiClient.get(`/weather/current?farmId=${farmId}`);
       if (data && data.temperature !== undefined) {
-        return { ...data, isDemo: false };
+        // Preserve the backend's honesty flag: WEATHER_PROVIDER=mock data must
+        // keep isDemo:true instead of being relabelled as live weather here.
+        return { ...data, isDemo: data.isDemo === true };
       }
     } catch (err) {
       // Fallback
@@ -69,7 +71,7 @@ export const mockClimateService = {
     try {
       const data = await apiClient.get(`/weather/summary?farmId=${farmId}`);
       if (data && data.currentCondition) {
-        return { ...data, isDemo: false };
+        return { ...data, isDemo: data.isDemo === true };
       }
     } catch (err) {
       // Fallback

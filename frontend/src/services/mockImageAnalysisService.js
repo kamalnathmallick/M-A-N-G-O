@@ -112,6 +112,18 @@ export const mockImageAnalysisService = {
       if (meta.plotId) formData.append('plotId', meta.plotId);
       if (meta.canopyDirection) formData.append('canopyDirection', meta.canopyDirection);
       if (meta.season) formData.append('season', meta.season);
+      if (meta.analysisDate) formData.append('analysisDate', meta.analysisDate);
+      // Plot area drives the plot-total yield figures; sent as typed by the farmer.
+      if (meta.plotArea) formData.append('plotArea', meta.plotArea);
+      // Per-sample canopy direction (North/South/East/West) so the backend can
+      // label each stored image with the direction it was captured from.
+      const sampleMeta = {};
+      realFiles.forEach((img) => {
+        if (img.canopyDirection) sampleMeta[img.rawFile.name] = img.canopyDirection;
+      });
+      if (Object.keys(sampleMeta).length > 0) {
+        formData.append('sampleMeta', JSON.stringify(sampleMeta));
+      }
 
       const total = realFiles.length || 1;
 
@@ -172,6 +184,9 @@ export const mockImageAnalysisService = {
         images: resultImages,
         errors: res.errors,
         predictionId: res.predictionId,
+        // Yield + climate provenance returned WITH the analysis (spec §16)
+        yieldEstimation: res.yieldEstimation ?? null,
+        climate: res.climate ?? null,
         modelVersion: res.modelVersion
       };
     }

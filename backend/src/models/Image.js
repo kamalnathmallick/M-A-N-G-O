@@ -63,33 +63,31 @@ const imageSchema = new mongoose.Schema(
       default: 'General'
     },
     stage: {
-      type: String,
-      default: 'Panicle Elongation & Bloom'
+      type: String
     },
-    // Quality check
+    // Quality check — written ONLY from the ML quality-gate response.
+    // No fabricated blur/brightness numbers: unknown stays unknown.
     quality: {
-      isValid: { type: Boolean, default: true },
-      blurScore: { type: Number, default: 120 },
-      isBlurry: { type: Boolean, default: false },
-      brightness: { type: Number, default: 128 },
-      message: { type: String, default: 'Pass' }
+      isValid: { type: Boolean },
+      blurScore: { type: Number },
+      isBlurry: { type: Boolean },
+      brightness: { type: Number },
+      message: { type: String }
     },
-    // Inference results
+    // Inference results — written ONLY from a real model response.
+    // No defaults: a missing label must not become "Good Yield Potential".
     classification: {
-      type: String,
-      default: 'Good Yield Potential'
+      type: String
     },
     confidence: {
-      type: Number,
-      default: 90.0
+      type: Number
     },
     status: {
       // Binary label set per CONTRACT.md §0:
       //   healthy (GOOD), poor_yield (BAD), rejected (quality failure)
       // legacy values kept for previously stored documents.
       type: String,
-      enum: ['healthy', 'poor_yield', 'rejected', 'pest_risk', 'diseased', 'drop_risk'],
-      default: 'healthy'
+      enum: ['healthy', 'poor_yield', 'rejected', 'pest_risk', 'diseased', 'drop_risk']
     },
     // NOTE: detectedBuds / healthyBuds / affectedBuds / boxes intentionally
     // have NO defaults and are never written by the backend — the dataset has

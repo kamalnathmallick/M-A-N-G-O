@@ -14,20 +14,25 @@ import {
 export default function LatestAnalysisCard({ 
   onStartAnalysis, 
   onViewDetailedClassification,
-  analysisData 
+  analysisData,
+  isDemoData = false
 }) {
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  // Bind the analysisData prop (fetched upstream) with the previous hardcoded
-  // values as display fallbacks so the card never renders empty fields.
-  const lastDate = analysisData?.lastAnalysisDate || '24 Aug 2026, 09:30 AM';
-  const sampleCount = analysisData?.sampleCount || 4;
-  const confidence = analysisData?.confidence ?? 94.2;
+  // Bind the analysisData prop (fetched upstream). Hardcoded 24 Aug / 94.2 / 4
+  // values are allowed ONLY for demo mode; a real run renders its own numbers
+  // or "—" when it does not carry one (no fabricated confidence).
+  const lastDate = analysisData?.lastAnalysisDate || (isDemoData ? '24 Aug 2026, 09:30 AM' : '—');
+  const sampleCount = analysisData?.sampleCount ?? (isDemoData ? 4 : null);
+  const confidence = analysisData?.confidence ?? (isDemoData ? 94.2 : null);
   const floweringStage = analysisData?.floweringStage || 'Active';
-  const budHealth = `${analysisData?.healthScore ?? 78}% Healthy`;
-  const dropRisk = analysisData?.flowerDropRisk || 'Moderate';
-  const climate = analysisData?.climateRisk || 'Favorable';
-  const lastAnalysis = analysisData?.lastAnalysisDate || 'Today, 09:30 AM';
+  const budHealth =
+    analysisData?.healthScore != null
+      ? `${analysisData.healthScore}% Healthy`
+      : isDemoData ? '78% Healthy' : '—';
+  const dropRisk = analysisData?.flowerDropRisk || (isDemoData ? 'Moderate' : '—');
+  const climate = analysisData?.climateRisk || (isDemoData ? 'Favorable' : '—');
+  const lastAnalysis = analysisData?.lastAnalysisDate || (isDemoData ? 'Today, 09:30 AM' : '—');
 
   return (
     <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-100/90 shadow-xs flex flex-col justify-between h-full">
@@ -62,7 +67,7 @@ export default function LatestAnalysisCard({
               <div className="flex items-center justify-between">
                 <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                  Sample #1 of {sampleCount}
+                  Sample #1 of {sampleCount ?? '—'}
                 </span>
                 <button
                   onClick={onViewDetailedClassification}
@@ -76,7 +81,10 @@ export default function LatestAnalysisCard({
               <div className="text-white">
                 <div className="text-xs font-semibold drop-shadow-sm">Alphonso Panicle</div>
                 <div className="text-[10px] text-emerald-300 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="w-3 h-3" /> {confidence}% Confidence (Healthy)
+                  <CheckCircle2 className="w-3 h-3" />
+                  {confidence != null
+                    ? `${confidence}% Confidence`
+                    : 'Confidence not recorded'}
                 </div>
               </div>
             </div>

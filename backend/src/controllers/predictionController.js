@@ -14,6 +14,21 @@ const riskBadgeColor = (risk) => (risk === 'Low' ? 'emerald' : risk === 'High' ?
 const riskToPercentage = (risk) => (risk === 'Low' ? 15 : risk === 'High' ? 65 : 35);
 
 /**
+ * Live climate -> payload fields for the ML yield rule. Demo/unavailable
+ * weather is withheld entirely (the ML service then uses its own defaults,
+ * disclosed via climateSource) so demo numbers are never passed off as real.
+ */
+const liveClimateFields = (climate) =>
+  climate && climate.isLive
+    ? {
+        temperature: climate.temperature,
+        humidity: climate.humidity,
+        ...(climate.rainfall != null ? { rainfall: climate.rainfall } : {}),
+        ...(climate.windSpeed != null ? { windSpeed: climate.windSpeed } : {})
+      }
+    : {};
+
+/**
  * Real weather -> human-readable climate string; anything demo/unavailable is
  * marked as unknown instead of fabricating a favourable reading (item 7).
  */
@@ -21,16 +36,24 @@ const describeClimate = async (farmId) => {
   try {
     const weather = await weatherService.getCurrentWeather(farmId);
     if (weather && weather.isDemo === false && weather.temperature !== undefined && weather.humidity !== undefined) {
+      const rainfall = Number(weather.rainfall);
+      const windSpeed = Number(weather.windSpeed);
       return {
         climateCondition: `${weather.condition} (${weather.temperature}°C, ${weather.humidity}% RH)`,
-        climate: { temperature: weather.temperature, humidity: weather.humidity, isLive: true }
+        climate: {
+          temperature: weather.temperature,
+          humidity: weather.humidity,
+          ...(Number.isFinite(rainfall) ? { rainfall } : {}),
+          ...(Number.isFinite(windSpeed) ? { windSpeed } : {}),
+          isLive: true
+        }
       };
     }
   } catch (err) {
     console.warn('[predictionController] Weather lookup failed:', err.message);
   }
   return {
-    climateCondition: 'Unknown (live weather unavailable)',
+    climateCondition: 'Unknown (live weather unavailable; demo weather withheld)',
     climate: { temperature: null, humidity: null, isLive: false }
   };
 };
@@ -44,8 +67,26 @@ export const analyzeBudBatch = async (req, res, next) => {
       variety = 'Alphonso (Hapus)',
       floweringStage = 'Panicle Elongation & Bloom',
       canopyDirection = 'General',
-      season = ''
+      season = '',
+      analysisDate = '',
+      plotArea = '',
+      sampleMeta = ''
     } = req.body;
+
+    // Per-sample canopy directions, e.g. { "north.jpg": "North", "south.jpg": "South" }.
+    // Lets each stored image keep the canopy direction it was captured from.
+    let perSampleDirection = {};
+    if (typeof sampleMeta === 'string' && sampleMeta.trim().startsWith('{')) {
+      try {
+        perSampleDirection = JSON.parse(sampleMeta);
+      } catch {
+        perSampleDirection = {};
+      }
+    }
+
+    // Plot area: use what the client sent, never invent a figure.
+    const parsedPlotAcres = parseFloat(String(plotArea).replace(/[^0-9.]/g, ''));
+    const plotAcres = Number.isFinite(parsedPlotAcres) && parsedPlotAcres > 0 ? parsedPlotAcres : null;
 
     // No fabricated sample payloads — at least one real image is required (§3).
     if (files.length === 0) {
@@ -72,11 +113,63 @@ export const analyzeBudBatch = async (req, res, next) => {
       season
     });
 
-    const yieldEst = await mlClientService.predictYield({
-      budHealth: mlResult.summary?.overallHealthScore ?? 78,
-      variety,
-      plotAcres: 2.5
-    });
+    // Nothing was classified (every sample failed the quality gate): mirror the
+    // frontend's "No results were saved" contract. Persisting here would write
+    // a fabricated 0% health run + yield range into Prediction/History/Plot.
+    const anyClassified = (mlResult.images || []).length;
+    if (anyClassified === 0 && mlResult.fromMLService === true) {
+      const reason =
+        (Array.isArray(mlResult.errors) && mlResult.errors[0]?.message) ||
+        'None of the uploaded images passed quality checks.';
+      return errorResponse(
+        res,
+        `${reason} Nothing was saved — no samples could be classified.`,
+        mlResult.errors || [],
+        422
+      );
+    }
+
+    // Yield estimate requires a REAL bud-health score back from the CNN.
+    // No measured health -> no invented 78% and no invented yield range.
+    const measuredHealth =
+      typeof mlResult.summary?.overallHealthScore === 'number' &&
+      Number.isFinite(mlResult.summary.overallHealthScore)
+        ? mlResult.summary.overallHealthScore
+        : null;
+
+    // Live climate is fetched BEFORE the yield call so real temperature/
+    // humidity/rainfall/wind enter the fusion. With WEATHER_PROVIDER=mock the
+    // values are demo, so they are withheld and climateSource discloses that
+    // the ML service used its own defaults instead.
+    const { climateCondition, climate } = await describeClimate(farmId);
+
+    const liveClimatePayload = liveClimateFields(climate);
+
+    const yieldEst = measuredHealth === null
+      ? {
+          expectedYieldMin: null,
+          expectedYieldMax: null,
+          expectedYieldAverage: null,
+          yieldUnit: 'tonnes/acre',
+          totalPlotExpectedMin: null,
+          totalPlotExpectedMax: null,
+          totalPlotUnit: 'tonnes',
+          trained: false,
+          method: 'unavailable_no_measured_bud_health',
+          modelVersion: 'mangosense-yield-rule-v1',
+          climateSource: 'not_used',
+          isDemo: false,
+          fromMLService: true
+        }
+      : {
+          ...(await mlClientService.predictYield({
+            budHealth: measuredHealth,
+            variety,
+            plotAcres: plotAcres ?? undefined,
+            ...liveClimatePayload
+          })),
+          climateSource: climate.isLive ? 'live_weather' : 'service_defaults'
+        };
 
     // Honest demo flags: derived from the ML result, never hardcoded.
     const budIsDemo = mlResult.isDemo === true || mlResult.is_demo === true || mlResult.fromMLService !== true;
@@ -84,9 +177,9 @@ export const analyzeBudBatch = async (req, res, next) => {
     const isDemo = budIsDemo || yieldIsDemo;
 
     const summary = mlResult.summary || {};
-    const overallHealth = summary.overallHealthScore ?? 78;
-    const dropRisk = summary.flowerDropRisk || 'Moderate';
-    const { climateCondition, climate } = await describeClimate(farmId);
+    const overallHealth = measuredHealth;
+    const healthText = overallHealth === null ? 'Not measured' : `${overallHealth}% healthy`;
+    const dropRisk = summary.flowerDropRisk || 'Unknown';
 
     // Best-effort farm name for the history entry
     let farmName = null;
@@ -105,22 +198,25 @@ export const analyzeBudBatch = async (req, res, next) => {
       for (const img of (mlResult.images || [])) {
         try {
           const sourceFile = files.find((f) => f.filename === img.filename);
+          const originalName = sourceFile?.originalname || img.title || img.filename || 'Bud Sample';
           const doc = await Image.create({
             userId: req.user?._id ?? req.user?.id,
             farmId,
             plotId,
             season,
             filename: img.filename || 'sample.jpg',
-            originalName: img.title || img.filename || 'Bud Sample',
+            originalName,
             url: img.url || `/uploads/${img.filename}`,
             filePath: sourceFile ? sourceFile.path : `uploads/${img.filename}`,
             mimeType: sourceFile ? sourceFile.mimetype : 'image/jpeg',
             size: sourceFile ? sourceFile.size : 0,
-            canopyDirection,
+            // Per-sample canopy direction when the wizard supplied one.
+            canopyDirection: perSampleDirection[originalName] || canopyDirection,
             stage: floweringStage,
-            classification: img.classification || 'Good Yield Potential',
+            // Only what the model actually returned — never a default label.
+            classification: img.classification ?? null,
             confidence: img.confidence ?? null,
-            status: img.status || 'healthy',
+            status: img.status ?? null,
             notes: img.notes || '',
             isDemo: budIsDemo
           });
@@ -143,6 +239,7 @@ export const analyzeBudBatch = async (req, res, next) => {
           variety,
           floweringStage,
           canopyDirection,
+          analysisDate: analysisDate || undefined,
           expectedYieldMin: yieldEst.expectedYieldMin,
           expectedYieldMax: yieldEst.expectedYieldMax,
           expectedYieldAverage: yieldEst.expectedYieldAverage,
@@ -153,8 +250,8 @@ export const analyzeBudBatch = async (req, res, next) => {
           factors: {
             budHealth: {
               percentage: overallHealth,
-              value: `${overallHealth}% healthy`,
-              status: overallHealth >= 75 ? 'favorable' : 'warning'
+              value: healthText,
+              status: overallHealth === null ? 'unknown' : overallHealth >= 75 ? 'favorable' : 'warning'
             },
             flowerDropRisk: {
               value: dropRisk,
@@ -166,6 +263,7 @@ export const analyzeBudBatch = async (req, res, next) => {
             budModel: mlResult.modelVersion || 'mangosense-cnn-v1',
             yieldModel: yieldEst.modelVersion || 'mangosense-yield-rule-v1'
           },
+          climateSource: yieldEst.climateSource || 'service_defaults',
           isDemo
         });
       } catch (err) {
@@ -173,11 +271,40 @@ export const analyzeBudBatch = async (req, res, next) => {
       }
     }
 
+    // Keep the plot's Dashboard summary in sync with THIS run so the Expected
+    // Yield / Bud Health cards stop showing seed values (78 / 4.8-5.4) after a
+    // real analysis. Demo farms use non-ObjectId ids and are skipped.
+    if (dbReady() && isValidObjectId(farmId) && !isDemo) {
+      try {
+        const plotUpdate = { lastAnalysisDate: analysisDate || new Date().toISOString() };
+        if (overallHealth !== null) plotUpdate.healthScore = overallHealth;
+        if (
+          Number.isFinite(yieldEst.expectedYieldMin) &&
+          Number.isFinite(yieldEst.expectedYieldMax)
+        ) {
+          plotUpdate.expectedYield = `${yieldEst.expectedYieldMin} - ${yieldEst.expectedYieldMax}`;
+        }
+        if (dropRisk !== 'Unknown') plotUpdate.flowerDropRisk = dropRisk;
+        await Farm.updateOne(
+          { _id: farmId, 'plots.id': plotId },
+          { $set: Object.fromEntries(Object.entries(plotUpdate).map(([k, v]) => [`plots.$.${k}`, v])) }
+        );
+      } catch (err) {
+        console.warn('[predictionController] Plot summary not updated:', err.message);
+      }
+    }
+
     // Record in HistoryRecord (contract §3 fields)
     const goodYieldCount = summary.goodYieldCount ?? 0;
     const poorYieldCount = summary.poorYieldCount ?? 0;
+    // Only call the batch healthy/poor when samples were actually classified.
+    const classifiedCount = goodYieldCount + poorYieldCount;
     const batchClassification =
-      poorYieldCount > goodYieldCount ? 'Poor Yield Potential' : 'Good Yield Potential';
+      classifiedCount === 0
+        ? 'Not classified'
+        : poorYieldCount > goodYieldCount
+        ? 'Poor Yield Potential'
+        : 'Good Yield Potential';
     const now = new Date();
 
     if (dbReady()) {
@@ -187,12 +314,12 @@ export const analyzeBudBatch = async (req, res, next) => {
           farmId,
           farmName: farmName || undefined,
           plot: plotId.toUpperCase(),
-          plotDetails: `${plotId.toUpperCase()} — 2.5 acres (${variety})`,
+          plotDetails: `${plotId.toUpperCase()}${plotAcres ? ` — ${plotAcres} acres` : ''} (${variety})`,
           season,
           date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
           budHealth: overallHealth,
-          healthyBudsText: `${overallHealth}%`,
+          healthyBudsText: overallHealth === null ? '—' : `${overallHealth}%`,
           flowerDropRisk: dropRisk,
           riskBadgeColor: riskBadgeColor(dropRisk),
           climateCondition,
@@ -209,12 +336,23 @@ export const analyzeBudBatch = async (req, res, next) => {
           totalPlotExpectedMin: yieldEst.totalPlotExpectedMin,
           totalPlotExpectedMax: yieldEst.totalPlotExpectedMax,
           yieldUnit: yieldEst.yieldUnit,
-          predictedYield: `${yieldEst.expectedYieldMin} – ${yieldEst.expectedYieldMax} t/acre`,
-          totalTonnes: `${yieldEst.totalPlotExpectedMin} – ${yieldEst.totalPlotExpectedMax} t`,
+          predictedYield:
+            yieldEst.expectedYieldMin === null || yieldEst.expectedYieldMax === null
+              ? 'Not available'
+              : `${yieldEst.expectedYieldMin} – ${yieldEst.expectedYieldMax} t/acre`,
+          totalTonnes:
+            yieldEst.totalPlotExpectedMin === null || yieldEst.totalPlotExpectedMax === null
+              ? 'Not available'
+              : `${yieldEst.totalPlotExpectedMin} – ${yieldEst.totalPlotExpectedMax} t`,
+          yieldMethod: yieldEst.method || null,
+          yieldTrained: yieldEst.trained === true,
           sampleCount: files.length,
-          keyObservation: isDemo
-            ? `Demo analysis: ${overallHealth}% estimated healthy bud signal across ${files.length} sample(s) — ML service was offline.`
-            : `Batch analysis completed. ${overallHealth}% healthy bud signal across ${files.length} sample(s).`,
+          keyObservation:
+            classifiedCount === 0
+              ? `All ${files.length} uploaded sample(s) failed quality checks — nothing was classified.`
+              : isDemo
+              ? `Demo analysis: ${healthText} estimated bud signal across ${files.length} sample(s) — ML service was offline.`
+              : `Batch analysis completed. ${healthText} bud signal across ${classifiedCount} classified sample(s).`,
           modelVersion: {
             budModel: mlResult.modelVersion || 'mangosense-cnn-v1',
             yieldModel: yieldEst.modelVersion || 'mangosense-yield-rule-v1'
@@ -234,6 +372,13 @@ export const analyzeBudBatch = async (req, res, next) => {
         isDemo,
         fromMLService: mlResult.fromMLService === true,
         predictionId: predictionRecord ? predictionRecord._id.toString() : 'pred-local',
+        // Yield + climate provenance travel WITH the analysis response so the
+        // wizard's result view never needs a second round-trip (spec §16).
+        yieldEstimation: yieldEst,
+        climate: {
+          condition: climateCondition,
+          isLive: climate.isLive === true
+        },
         modelVersion: {
           budModel: mlResult.modelVersion || 'mangosense-cnn-v1',
           yieldModel: yieldEst.modelVersion || 'mangosense-yield-rule-v1'
@@ -379,13 +524,20 @@ export const simulateSensitivity = async (req, res, next) => {
       return errorResponse(res, 'plotAcres must be a positive number', null, 400);
     }
 
-    const dynamicYield = await mlClientService.predictYield({
-      budHealth: budHealthNum,
-      rainfallIntensity,
-      pestControlActive: Boolean(pestControlActive),
-      variety,
-      plotAcres: plotAcresNum
-    });
+    const { climate } = await describeClimate(req.body.farmId || 'farm-1');
+    const dynamicYield = {
+      ...(await mlClientService.predictYield({
+        budHealth: budHealthNum,
+        rainfallIntensity,
+        pestControlActive: Boolean(pestControlActive),
+        variety,
+        plotAcres: plotAcresNum,
+        // Same live-climate handling as the real analysis run so the
+        // simulator agrees with the stored prediction for identical inputs.
+        ...liveClimateFields(climate)
+      })),
+      climateSource: climate.isLive ? 'live_weather' : 'service_defaults'
+    };
 
     return successResponse(res, dynamicYield, 'Simulation calculated');
   } catch (error) {
