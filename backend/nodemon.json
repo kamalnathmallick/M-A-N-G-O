@@ -1,0 +1,9 @@
+{
+  "watch": ["src"],
+  "ext": "js,mjs,cjs,json",
+  "ignore": ["src/tests/**", "uploads/**"],
+  "exitCrash": false,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

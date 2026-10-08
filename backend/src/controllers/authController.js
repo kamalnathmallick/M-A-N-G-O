@@ -134,6 +134,61 @@ export const login = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/auth/demo
+ * Returns a real signed JWT for the seeded demo user so that demo-mode
+ * frontend sessions can call authenticated endpoints (e.g. /predictions/bud).
+ * When MongoDB is offline, falls back to an in-memory demo account so the
+ * app stays usable without a database.
+ */
+export const demoLogin = async (req, res, next) => {
+  try {
+    const DEMO_EMAIL = 'farmer@mangosense.org';
+    const DEMO_NAME = 'Demo Farmer';
+
+    // --- MongoDB path -------------------------------------------------------
+    if (dbReady()) {
+      let user = await User.findOne({ email: DEMO_EMAIL });
+      if (!user) {
+        // Seed user was wiped — recreate it on-the-fly so demo always works.
+        user = await User.create({
+          name: 'Ramesh Patil',
+          email: DEMO_EMAIL,
+          password: 'password123',
+          role: 'farmer',
+          location: 'Ratnagiri, Maharashtra, India'
+        });
+      }
+      const token = signToken({ id: user._id, role: user.role, email: user.email });
+      return successResponse(
+        res,
+        { token, user: { ...publicUser(user), isDemo: true } },
+        'Demo session created'
+      );
+    }
+
+    // --- Offline fallback (MongoDB down) ------------------------------------
+    let offlineUser = offlineAuthStore.findByEmail(DEMO_EMAIL);
+    if (!offlineUser) {
+      offlineUser = await offlineAuthStore.create({
+        name: DEMO_NAME,
+        email: DEMO_EMAIL,
+        password: 'demo-offline-only',
+        role: 'farmer',
+        location: 'Ratnagiri, Maharashtra, India'
+      });
+    }
+    const token = signToken(offlineUser);
+    return successResponse(
+      res,
+      { token, user: { ...offlineAuthStore.toPublicUser(offlineUser), isDemo: true } },
+      'Demo session created (offline mode)'
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getMe = async (req, res, next) => {
   try {
     if (!req.user) {

@@ -47,6 +47,22 @@ export const mlClientService = {
     }
   },
 
+  /**
+   * Model card + last recorded evaluation (contract §14/§16), proxied from the
+   * ML service's GET /model/info. Values come from evaluation_report.json /
+   * training_metrics.json on disk — never fabricated here. When the ML service
+   * is unreachable we return { available:false } so callers can show an honest
+   * "unavailable" state instead of numbers.
+   */
+  getModelInfo: async () => {
+    try {
+      const response = await axios.get(`${env.ML_SERVICE_URL}/model/info`, { timeout: 2500 });
+      return { available: true, info: response.data || null };
+    } catch (err) {
+      return { available: false, error: err.message };
+    }
+  },
+
   // Send batch of bud images to ML service (returns the FLATTENED ML body)
   analyzeBudImages: async (images, options = {}) => {
     const health = await mlClientService.checkHealth();

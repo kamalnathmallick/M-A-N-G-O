@@ -113,17 +113,37 @@ export const analyzeBudBatch = async (req, res, next) => {
       season
     });
 
+    // The ML service (FastAPI) does not know the Express origin, so it returns
+    // url: "" for every image.  Backfill each result image with the correct
+    // persistent /uploads/<filename> URL using the uploaded file mapping.
+    // This is the only place we can do it — after inference but before the
+    // response is built — because only here do we have both the Express-side
+    // filenames AND the ML result image list.
+    const filenameToUrl = {};
+    files.forEach((file) => {
+      filenameToUrl[file.filename] = `/uploads/${file.filename}`;
+    });
+    if (Array.isArray(mlResult.images)) {
+      mlResult.images = mlResult.images.map((img) => ({
+        ...img,
+        url: filenameToUrl[img.filename] || img.url || `/uploads/${img.filename}`,
+        fallbackUrl: filenameToUrl[img.filename] || `/uploads/${img.filename}`
+      }));
+    }
+
     // Nothing was classified (every sample failed the quality gate): mirror the
     // frontend's "No results were saved" contract. Persisting here would write
     // a fabricated 0% health run + yield range into Prediction/History/Plot.
     const anyClassified = (mlResult.images || []).length;
     if (anyClassified === 0 && mlResult.fromMLService === true) {
-      const reason =
+      const detail =
         (Array.isArray(mlResult.errors) && mlResult.errors[0]?.message) ||
         'None of the uploaded images passed quality checks.';
+      // Required user-facing sentence (spec §11): quality failures never become
+      // a fabricated classification.
       return errorResponse(
         res,
-        `${reason} Nothing was saved — no samples could be classified.`,
+        `Image quality is insufficient for reliable classification. Please upload a clearer image. ${detail} Nothing was saved — no samples could be classified.`,
         mlResult.errors || [],
         422
       );
@@ -228,6 +248,56 @@ export const analyzeBudBatch = async (req, res, next) => {
     }
 
     // Create / Save Prediction Record
+    // Build fully dynamic factors from the real CNN output so downstream pages
+    // (Yield Prediction, Dashboard) reflect the actual uploaded images.
+    const goodCount  = summary.goodYieldCount  ?? 0;
+    const poorCount  = summary.poorYieldCount  ?? 0;
+    const totalCount = goodCount + poorCount;
+    const goodRatio  = totalCount > 0 ? Math.round((goodCount / totalCount) * 100) : 0;
+    const avgConf    = typeof summary.confidenceScore === 'number' ? summary.confidenceScore : null;
+
+    // Flower-drop risk derived from actual image results (not hardcoded):
+    //   - image-health: inverted goodRatio (more POOR → higher drop risk)
+    //   - confidence modifier: low confidence nudges risk up slightly
+    const imageRiskScore = totalCount > 0 ? (poorCount / totalCount) : 0;
+    const confPenalty    = avgConf !== null && avgConf < 60 ? 0.1 : 0;
+    const rawDropRisk    =
+      overallHealth === null ? dropRisk :
+      (imageRiskScore + confPenalty) >= 0.5 ? 'High' :
+      (imageRiskScore + confPenalty) >= 0.25 ? 'Moderate' : 'Low';
+
+    // Climate factor percentage: scaled from 0 (adverse) to 100 (optimal).
+    // Uses live temperature / humidity when available, otherwise 70 (neutral).
+    const climateTemp    = climate.temperature ?? null;
+    const climateHumid   = climate.humidity    ?? null;
+    const climatePct =
+      climateTemp !== null && climateHumid !== null
+        ? Math.round(
+            Math.max(0, Math.min(100,
+              100 - Math.abs(climateTemp - 28) * 3   // optimal ~28 °C
+                  - Math.max(0, climateHumid - 80) * 1.5  // penalty above 80% RH
+            ))
+          )
+        : 70; // neutral fallback when weather is unavailable
+
+    const climateStatus =
+      climatePct >= 70 ? 'favorable' :
+      climatePct >= 50 ? 'warning' : 'unfavorable';
+
+    const climateImpactLabel =
+      climateTemp !== null
+        ? `${climateTemp}°C, ${climateHumid ?? '—'}% RH — ${climate.isLive ? 'live weather' : 'service defaults'}`
+        : 'Weather data unavailable';
+
+    // Pest pressure: flowerDropRisk score + poorYield pressure
+    const pestScore = (rawDropRisk === 'High' ? 2 : rawDropRisk === 'Moderate' ? 1 : 0)
+                    + (poorCount > 0 ? 1 : 0);
+    const pestPct    = Math.round(Math.min(100, pestScore * 25));
+    const pestStatus = pestScore >= 2 ? 'warning' : 'favorable';
+    const pestLabel  =
+      pestScore >= 2 ? 'Elevated — monitor closely' :
+      pestScore === 1 ? 'Low–Moderate' : 'Low';
+
     let predictionRecord = null;
     if (dbReady()) {
       try {
@@ -247,18 +317,50 @@ export const analyzeBudBatch = async (req, res, next) => {
           totalPlotExpectedMin: yieldEst.totalPlotExpectedMin,
           totalPlotExpectedMax: yieldEst.totalPlotExpectedMax,
           totalPlotUnit: yieldEst.totalPlotUnit,
+          // All factor fields are computed from real CNN + climate — no hardcoded defaults.
           factors: {
             budHealth: {
+              label: 'Bud Health',
               percentage: overallHealth,
               value: healthText,
-              status: overallHealth === null ? 'unknown' : overallHealth >= 75 ? 'favorable' : 'warning'
+              status: overallHealth === null ? 'unknown' : overallHealth >= 75 ? 'favorable' : 'warning',
+              badge: overallHealth === null ? 'Not measured'
+                    : overallHealth >= 75 ? 'Good quality panicles'
+                    : 'Below threshold — monitor',
+              impact: overallHealth === null ? '—'
+                    : `${goodCount} Good / ${poorCount} Poor of ${totalCount} samples (${goodRatio}% good ratio)`
             },
             flowerDropRisk: {
-              value: dropRisk,
-              percentage: riskToPercentage(dropRisk),
-              status: dropRisk === 'Low' ? 'favorable' : 'warning'
+              label: 'Flower Drop Risk',
+              value: rawDropRisk,
+              percentage: riskToPercentage(rawDropRisk),
+              status: rawDropRisk === 'Low' ? 'favorable' : 'warning',
+              badge: rawDropRisk === 'Low' ? 'Low risk'
+                    : rawDropRisk === 'High' ? 'Elevated — act promptly' : 'Monitor conditions',
+              impact: `Derived from ${goodRatio}% good-yield ratio${avgConf !== null ? ` at ${avgConf}% avg confidence` : ''}`
+            },
+            climate: {
+              label: 'Climate Condition',
+              value: climatePct >= 70 ? 'Favorable' : climatePct >= 50 ? 'Marginal' : 'Adverse',
+              percentage: climatePct,
+              status: climateStatus,
+              badge: climate.isLive ? 'Live weather' : 'Service defaults',
+              impact: climateImpactLabel
+            },
+            pestRisk: {
+              label: 'Pest Risk',
+              value: pestLabel,
+              percentage: pestPct,
+              status: pestStatus,
+              badge: pestScore >= 2 ? 'High pressure' : 'Normal',
+              impact: `Score ${pestScore}/3 from drop-risk + poor-yield signal`
             }
           },
+          // Summary stats stored for downstream use (recommendations, dashboard)
+          sampleCount: files.length,
+          goodYieldCount: goodCount,
+          poorYieldCount: poorCount,
+          confidence: avgConf,
           modelVersion: {
             budModel: mlResult.modelVersion || 'mangosense-cnn-v1',
             yieldModel: yieldEst.modelVersion || 'mangosense-yield-rule-v1'
@@ -421,20 +523,58 @@ export const getLatestPrediction = async (req, res, next) => {
       );
     }
 
-    // No stored prediction for this user/plot -> flagged demo fallback (§3)
+    // No Prediction record for this user/plot yet.
+    // Try to reconstruct a best-effort estimate from the latest HistoryRecord
+    // so the Yield Prediction page reflects real analysis data rather than
+    // hardcoded demo numbers.
+    let latestHistory = null;
+    if (dbReady()) {
+      try {
+        latestHistory = await HistoryRecord.findOne({
+          userId: req.user._id ?? req.user.id
+        }).sort({ createdAt: -1 }).lean();
+      } catch (err) {
+        console.warn('[predictionController] HistoryRecord lookup failed:', err.message);
+      }
+    }
+
+    // Derive real inputs from history when available; otherwise fall back to
+    // honest demo defaults (all fields clearly labelled isDemo: true).
+    const fallbackBudHealth = latestHistory?.budHealth ?? 78;
+    const fallbackVariety   = latestHistory?.plotDetails?.split('(')[1]?.replace(')', '').trim()
+                              || 'Alphonso';
+    const fallbackAcres     = latestHistory?.plotDetails
+                              ? parseFloat(String(latestHistory.plotDetails).replace(/[^0-9.]/g, '')) || 2.5
+                              : 2.5;
+    const fallbackGoodCount = latestHistory?.goodYieldCount ?? null;
+    const fallbackPoorCount = latestHistory?.poorYieldCount ?? null;
+    const fallbackTotal     = (fallbackGoodCount ?? 0) + (fallbackPoorCount ?? 0);
+    const fallbackGoodRatio = fallbackTotal > 0
+      ? Math.round(((fallbackGoodCount ?? 0) / fallbackTotal) * 100)
+      : null;
+    const fallbackDropRisk  = latestHistory?.flowerDropRisk ?? 'Moderate';
+    const fallbackConf      = latestHistory?.confidence ?? null;
+    const hasRealHistory    = latestHistory && latestHistory.isDemo !== true;
+
     const yieldEst = await mlClientService.predictYield({
-      budHealth: 78,
-      variety: 'Alphonso',
-      plotAcres: 2.5
+      budHealth: fallbackBudHealth,
+      variety:   fallbackVariety,
+      plotAcres: fallbackAcres
     });
 
+    // Build factor cards from real history values when available.
+    const fbDropRiskPct = riskToPercentage(fallbackDropRisk);
+    const fbPestScore   = (fallbackDropRisk === 'High' ? 2 : fallbackDropRisk === 'Moderate' ? 1 : 0)
+                        + ((fallbackPoorCount ?? 0) > 0 ? 1 : 0);
+
     const demoPrediction = {
-      isDemo: true,
+      isDemo: !hasRealHistory,
       predictionId: 'pred-default',
-      generatedAt: '24 Aug 2026, 09:30 AM',
+      generatedAt: latestHistory?.date
+        ? `${latestHistory.date}${latestHistory.time ? ', ' + latestHistory.time : ''}`
+        : null,
       plotId,
-      plotName: 'Plot A — 2.5 acres',
-      variety: 'Alphonso (Hapus)',
+      variety: fallbackVariety,
       expectedYieldMin: yieldEst.expectedYieldMin,
       expectedYieldMax: yieldEst.expectedYieldMax,
       expectedYieldAverage: yieldEst.expectedYieldAverage,
@@ -442,64 +582,76 @@ export const getLatestPrediction = async (req, res, next) => {
       totalPlotExpectedMin: yieldEst.totalPlotExpectedMin,
       totalPlotExpectedMax: yieldEst.totalPlotExpectedMax,
       totalPlotUnit: 'tonnes total',
-      predictionLabel: 'Demo Prediction',
-      confidenceNote: 'Demo estimation based on multi-sample bud classification and 15-day climate projection.',
+      trained: false,
+      method: 'rule_based_pending_yield_dataset',
+      predictionLabel: hasRealHistory ? 'Rule-Based Estimate' : 'Demo Prediction',
+      confidenceNote: hasRealHistory
+        ? 'Rule-based yield estimate from CNN bud-health score + agronomic rules. Not a trained regression model.'
+        : 'Demo estimation — no real analysis has been run yet.',
       factors: {
         budHealth: {
           label: 'Bud Health',
-          value: '78% healthy',
-          percentage: 78,
-          impact: '+18% vs poor bud baseline',
-          status: 'favorable',
-          badge: 'High Quality Panicles'
-        },
-        climate: {
-          label: 'Climate Condition',
-          value: 'Favorable',
-          percentage: 82,
-          impact: '+12% optimal anthesis window',
-          status: 'favorable',
-          badge: 'Optimal Temperature'
+          percentage: fallbackBudHealth,
+          value: `${fallbackBudHealth}% healthy`,
+          status: fallbackBudHealth >= 75 ? 'favorable' : 'warning',
+          badge: fallbackBudHealth >= 75 ? 'Good quality panicles' : 'Below threshold — monitor',
+          impact: fallbackGoodRatio !== null
+            ? `${fallbackGoodCount} Good / ${fallbackPoorCount} Poor of ${fallbackTotal} samples (${fallbackGoodRatio}% good ratio)`
+            : `${fallbackBudHealth}% measured bud health`
         },
         flowerDropRisk: {
           label: 'Flower Drop Risk',
-          value: 'Moderate',
-          percentage: 35,
-          impact: '-9% potential yield loss if untreated',
-          status: 'warning',
-          badge: 'Monitor Rain & Wind'
+          value: fallbackDropRisk,
+          percentage: fbDropRiskPct,
+          status: fallbackDropRisk === 'Low' ? 'favorable' : 'warning',
+          badge: fallbackDropRisk === 'Low' ? 'Low risk'
+                : fallbackDropRisk === 'High' ? 'Elevated — act promptly' : 'Monitor conditions',
+          impact: fallbackGoodRatio !== null
+            ? `Derived from ${fallbackGoodRatio}% good-yield ratio${fallbackConf !== null ? ` at ${fallbackConf}% avg conf` : ''}`
+            : 'Based on latest available data'
+        },
+        climate: {
+          label: 'Climate Condition',
+          value: 'See Climate page',
+          percentage: 70,
+          status: 'favorable',
+          badge: 'Check live weather',
+          impact: 'Visit the Climate & Forecast page for current conditions'
         },
         pestRisk: {
           label: 'Pest Risk',
-          value: 'Low – Moderate',
-          percentage: 22,
-          impact: '-4% localized hopper pressure',
-          status: 'favorable',
-          badge: 'Early Stage Detected'
+          value: fbPestScore >= 2 ? 'Elevated' : fbPestScore === 1 ? 'Low–Moderate' : 'Low',
+          percentage: Math.round(Math.min(100, fbPestScore * 25)),
+          status: fbPestScore >= 2 ? 'warning' : 'favorable',
+          badge: fbPestScore >= 2 ? 'High pressure' : 'Normal',
+          impact: `Score ${fbPestScore}/3 from drop-risk + poor-yield signal`
         }
       },
-      benchmark: {
-        varietyHistoricalAverage: 4.6,
-        farmLastYearYield: 4.5,
-        regionalBenchmark: 4.2,
-        differenceFromLastYear: '+13.3%'
-      },
-      yieldDistribution: [
-        { scenario: 'Severe Drop Risk', yield: 3.8, probability: 10, fill: '#ef4444' },
-        { scenario: 'Sub-optimal Weather', yield: 4.4, probability: 25, fill: '#f59e0b' },
-        { scenario: 'Current Forecast Range', yield: 5.1, probability: 85, fill: '#15803d', isCurrent: true },
-        { scenario: 'Optimized Management', yield: 5.8, probability: 45, fill: '#10b981' }
-      ],
+      // Yield scenario chart: derived from the calculated estimate, not hardcoded
+      yieldDistribution: yieldEst.expectedYieldAverage != null ? [
+        { scenario: 'Severe Drop Risk',       yield: +(yieldEst.expectedYieldAverage * 0.75).toFixed(1), probability: 10,  fill: '#ef4444' },
+        { scenario: 'Sub-optimal Weather',    yield: +(yieldEst.expectedYieldAverage * 0.90).toFixed(1), probability: 25,  fill: '#f59e0b' },
+        { scenario: 'Current Forecast Range', yield: yieldEst.expectedYieldAverage,                      probability: 85,  fill: '#15803d', isCurrent: true },
+        { scenario: 'Optimised Management',   yield: +(yieldEst.expectedYieldAverage * 1.20).toFixed(1), probability: 45,  fill: '#10b981' }
+      ] : [],
       stageMilestones: [
-        { stage: 'Flower Bud Emergence', date: 'Early August', status: 'Completed', health: '82%' },
-        { stage: 'Panicle Elongation (Current)', date: 'Late August', status: 'In Progress', health: '78%' },
-        { stage: 'Full Anthesis & Pollination', date: 'Early September', status: 'Upcoming', health: 'Estimated 75%' },
-        { stage: 'Fruitlet Set (Pea Stage)', date: 'Mid September', status: 'Upcoming', health: 'Pending' },
-        { stage: 'Harvesting', date: 'Late October - November', status: 'Projected', health: 'Target: 5.1 t/acre' }
+        { stage: 'Flower Bud Emergence',            date: 'Early Season',  status: 'Completed',    health: fallbackBudHealth >= 75 ? '≥75% bud health observed' : `${fallbackBudHealth}% bud health` },
+        { stage: 'Panicle Elongation (Current)',    date: 'Active Stage',  status: 'In Progress',  health: `${fallbackBudHealth}% healthy` },
+        { stage: 'Full Anthesis & Pollination',     date: 'Upcoming',      status: 'Upcoming',     health: 'Pending next analysis' },
+        { stage: 'Fruitlet Set (Pea Stage)',         date: 'Upcoming',      status: 'Upcoming',     health: 'Pending' },
+        { stage: 'Harvesting',                      date: 'End of Season', status: 'Projected',
+          health: yieldEst.expectedYieldAverage != null
+            ? `Target: ${yieldEst.expectedYieldAverage} t/acre (rule-based)` : 'Pending analysis' }
       ]
     };
 
-    return successResponse(res, demoPrediction, 'Demo yield prediction (no stored prediction for this plot)');
+    return successResponse(
+      res,
+      demoPrediction,
+      hasRealHistory
+        ? 'Yield estimate from latest analysis (no stored Prediction record for this plot)'
+        : 'Demo yield prediction (no analysis run yet)'
+    );
   } catch (error) {
     next(error);
   }

@@ -11,6 +11,7 @@ there are no hardcoded/simulated values, bounding boxes, or bud counts
 (this dataset has no detection annotations, contract §0).
 """
 
+import json
 import os
 import shutil
 import tempfile
@@ -201,6 +202,134 @@ def _build_bud_response(
         },
         "images": entries,
         "errors": errors,
+    }
+
+
+def _read_json_report(filename: str) -> Optional[Dict[str, Any]]:
+    """Load a training/evaluation JSON written next to the checkpoint (if present).
+
+    Tries the process-relative location first (the service runs from ml/), then
+    a path anchored at this module's directory, so the endpoint works no matter
+    where uvicorn was started from.
+    """
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(os.path.dirname(CNN_WEIGHTS_PATH) or ".", filename),
+        os.path.join(module_dir, "models", filename),
+    ]
+    for path in candidates:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else None
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def _count_dataset_classes(dataset_path: str, class_to_folder: Dict[str, int]) -> Dict[str, Any]:
+    """Count class files on disk — the real 16 (GOOD 10 / BAD 6) split.
+
+    Returns {"total": int, "perClass": {"GOOD": 10, "BAD": 6}, "onDisk": bool}.
+    When the dataset folder is missing, onDisk is false and counts are null
+    (the frontend then shows "Unavailable" instead of a fabricated number).
+    """
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [dataset_path, os.path.join(module_dir, dataset_path)]
+    resolved = next((p for p in candidates if os.path.isdir(p)), None)
+
+    per_class: Dict[str, int] = {}
+    if class_to_folder and resolved:
+        for folder in class_to_folder.keys():
+            folder_path = os.path.join(resolved, folder)
+            if not os.path.isdir(folder_path):
+                continue
+            count = sum(
+                1 for entry in os.scandir(folder_path)
+                if entry.is_file() and entry.path.lower().endswith(
+                    tuple(ext.lower() for ext in ALLOWED_EXTENSIONS)
+                )
+            )
+            per_class[folder] = count
+    on_disk = bool(per_class)
+    total = sum(per_class.values()) if on_disk else 0
+    return {"total": total if on_disk else None, "perClass": per_class if on_disk else None, "onDisk": on_disk}
+
+
+@app.get("/model/info")
+def model_info():
+    """Model card + last recorded evaluation (contract §14/§16).
+
+    Every value is read from the files actually written by train.py/eval —
+    nothing is hardcoded here. Missing files -> null values (the frontend
+    shows "Unavailable (model not evaluated)" instead of inventing numbers).
+    """
+    cfg = bud_predictor.config or {}
+    cnn_cfg = cfg.get("cnn", {})
+    versions = cfg.get("model_versions", {})
+
+    evaluation = _read_json_report("evaluation_report.json")
+    training = _read_json_report("training_metrics.json")
+
+    eval_metrics = (evaluation or {}).get("metrics") or None
+    if isinstance(eval_metrics, dict):
+        # Flatten for a stable frontend contract while keeping raw data.
+        classification_report = (evaluation or {}).get("classification_report") or {}
+        eval_metrics = {
+            **eval_metrics,
+            "accuracy": eval_metrics.get("accuracy"),
+            "f1Macro": eval_metrics.get("f1_macro"),
+            "classificationReport": classification_report,
+        }
+
+    dataset_info = (evaluation or {}).get("dataset") or (training or {}).get("dataset") or {}
+    class_to_folder = cnn_cfg.get("class_to_folder") or dataset_info.get("class_to_index") or {}
+    dataset_path = dataset_info.get("path") or "dataset/raw"
+    dataset_counts = _count_dataset_classes(dataset_path, class_to_folder)
+
+    return {
+        "modelVersion": MODEL_VERSION,
+        "architecture": "MobileNetV3-small"
+        if str(cnn_cfg.get("backbone", "")) == "mobilenet_v3_small"
+        else str(cnn_cfg.get("backbone", "unknown")),
+        "backbone": cnn_cfg.get("backbone"),
+        "numClasses": bud_predictor.num_classes,
+        "classLabels": bud_predictor.class_names,
+        "classToIndex": dataset_info.get("class_to_index") or class_to_folder,
+        "inputSize": cnn_cfg.get("input_size", [224, 224]),
+        "normalization": {"mean": cnn_cfg.get("mean"), "std": cnn_cfg.get("std")},
+        "featureDim": bud_predictor.feature_dim,
+        "checkpoint": CNN_WEIGHTS_PATH,
+        "weightsLoaded": bud_predictor.model is not None,
+        "isDemo": bud_predictor.is_demo,
+        "device": bud_predictor.device,
+        "dataset": {
+            "path": dataset_path,
+            "totalImages": dataset_counts["total"] if dataset_counts["onDisk"] else dataset_info.get("total_images"),
+            "classCounts": dataset_counts["perClass"],
+            "countedFromDisk": dataset_counts["onDisk"],
+        },
+        "split": (training or {}).get("split") or (evaluation or {}).get("split"),
+        "evaluation": {
+            "generatedAt": (evaluation or {}).get("generated_at"),
+            "checkpoint": (evaluation or {}).get("checkpoint"),
+            "metrics": eval_metrics,
+            "confusionMatrix": (evaluation or {}).get("confusion_matrix"),
+            "warnings": (evaluation or {}).get("warnings") or [],
+        },
+        "training": {
+            "generatedAt": (training or {}).get("generated_at"),
+            "model": (training or {}).get("model"),
+            "epochsRun": ((training or {}).get("training") or {}).get("epochs_run"),
+            "bestEpoch": ((training or {}).get("training") or {}).get("best_epoch"),
+        },
+        # Yield "model" is a RULE ENGINE only — trained:false is the fact that
+        # governs every UI label; no trained regressor is implied here.
+        "yieldModel": {
+            "ruleVersion": versions.get("yield_rule"),
+            "trained": fusion_pipeline.regressor is not None,
+            "kind": "rule-engine" if fusion_pipeline.regressor is None else "regressor",
+        },
     }
 
 

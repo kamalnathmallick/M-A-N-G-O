@@ -1,27 +1,95 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Sparkles, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Bug, 
-  Flame, 
-  Maximize2, 
-  Filter, 
-  ArrowRight, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  Bug,
+  Flame,
+  Maximize2,
+  Filter,
+  ArrowRight,
   Info,
   ShieldAlert,
   ChevronRight,
   TrendingUp,
-  RotateCcw
+  RotateCcw,
+  ImageOff
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { SAMPLE_BUD_IMAGES } from '../../services/mockImageAnalysisService';
 import { apiClient } from '../../services/apiClient';
 
-export default function ImageAnalysisView({ 
+/**
+ * Resolve an image URL returned by the backend.
+ *
+ * The backend returns relative paths like /uploads/<filename>.
+ * The browser needs an absolute URL: http://localhost:5000/uploads/<filename>.
+ * We derive the backend origin from apiClient.baseUrl so no URL is hardcoded.
+ *
+ * Rules:
+ *  - Already absolute (http/https/blob/data)  → return as-is
+ *  - Relative path starting with /            → prepend backend origin
+ *  - Empty / falsy                            → return null (triggers fallback)
+ */
+const backendOrigin = (() => {
+  try {
+    return new URL(apiClient.baseUrl).origin; // e.g. "http://localhost:5000"
+  } catch {
+    return 'http://localhost:5000';
+  }
+})();
+
+const resolveImageUrl = (url) => {
+  if (!url) return null;
+  if (/^(https?:|blob:|data:)/.test(url)) return url;
+  if (url.startsWith('/')) return `${backendOrigin}${url}`;
+  return url;
+};
+
+/**
+ * Renders a bud image with URL resolution and a graceful "unavailable" fallback.
+ * Tries img.url first; if that fails or is empty, tries img.fallbackUrl; if both
+ * fail, shows an "Image unavailable" placeholder instead of a blank rectangle.
+ */
+function BudImage({ url, fallbackUrl, title, className }) {
+  const primary = resolveImageUrl(url);
+  const secondary = resolveImageUrl(fallbackUrl);
+  const [src, setSrc] = useState(primary || secondary);
+  const [failed, setFailed] = useState(!primary && !secondary);
+
+  const handleError = useCallback(() => {
+    if (src === primary && secondary && secondary !== primary) {
+      setSrc(secondary);
+    } else {
+      setFailed(true);
+    }
+  }, [src, primary, secondary]);
+
+  if (failed || !src) {
+    return (
+      <div className={`flex flex-col items-center justify-center gap-1.5 bg-slate-800 text-slate-500 ${className}`}>
+        <ImageOff className="w-6 h-6" />
+        <span className="text-[10px] font-medium">Image unavailable</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={title}
+      className={className}
+      onError={handleError}
+    />
+  );
+}
+
+export default function ImageAnalysisView({
   images = SAMPLE_BUD_IMAGES, 
   isDemo = true,
   analysisSummary = null,
+  modelVersion = null,
+  errors = [],
   onContinueToYield, 
   onStartNewAnalysis 
 }) {
@@ -92,6 +160,77 @@ export default function ImageAnalysisView({
     ? Math.round((total / (total + analysisSummary.rejectedCount)) * 100)
     : null;
 
+  // ---------------------------------------------------------------------
+  // Hero card (spec §5): the classification result itself — prediction,
+  // actual softmax confidence, both class probabilities, model identity and
+  // aggregate counts. Every number derives from per-image model output.
+  // ---------------------------------------------------------------------
+  const withRisk = images.filter(
+    img => img.risk && typeof img.risk.goodYield === 'number' && typeof img.risk.poorYield === 'number'
+  );
+  const isSingle = images.length === 1;
+  const singleImage = isSingle ? images[0] : null;
+
+  // Batch mean of BOTH class probabilities (only images carrying risk).
+  const meanRisk = withRisk.length
+    ? {
+        goodYield:
+          withRisk.reduce((acc, img) => acc + img.risk.goodYield, 0) / withRisk.length,
+        poorYield:
+          withRisk.reduce((acc, img) => acc + img.risk.poorYield, 0) / withRisk.length
+      }
+    : null;
+  const heroRisk = singleImage?.risk || meanRisk;
+
+  // Prediction: single image -> its label; batch -> majority class with counts,
+  // "Mixed" on a tie (mirrors backend batchClassification).
+  const heroPrediction = isSingle
+    ? singleImage.classification || '—'
+    : total === 0
+    ? '—'
+    : goodList.length > poorList.length
+    ? 'Good Yield Potential'
+    : poorList.length > goodList.length
+    ? 'Poor Yield Potential'
+    : 'Mixed';
+
+  const heroPredictionLabel =
+    heroPrediction === 'Good Yield Potential'
+      ? 'GOOD YIELD POTENTIAL'
+      : heroPrediction === 'Poor Yield Potential'
+      ? 'POOR YIELD POTENTIAL'
+      : heroPrediction === 'Mixed'
+      ? `Mixed (G${goodList.length} / P${poorList.length})`
+      : heroPrediction;
+
+  // Confidence: single -> exact softmax of that image; batch -> mean of the
+  // per-image confidences (labelled as average below).
+  const heroConfidence = isSingle
+    ? typeof singleImage.confidence === 'number'
+      ? singleImage.confidence
+      : null
+    : avgConfidence;
+
+  // Model identity: architecture is a static fact (config backbone);
+  // version comes from the run's modelVersion or the per-image record.
+  const heroModelVersion =
+    modelVersion?.budModel ||
+    images.find(img => img.model_version)?.model_version ||
+    (isDemo ? null : 'mangosense-cnn-v1');
+  const heroModelLine = heroModelVersion
+    ? `MobileNetV3-small · ${heroModelVersion}`
+    : 'MobileNetV3-small';
+
+  // Partial quality rejections disclosed on the result page (spec §11).
+  const rejectedCount =
+    typeof analysisSummary?.rejectedCount === 'number'
+      ? analysisSummary.rejectedCount
+      : Array.isArray(errors)
+      ? errors.length
+      : 0;
+
+  const pct = (v) => (typeof v === 'number' ? `${(v * 100).toFixed(1)}%` : '—');
+
   const filteredImages = images.filter(img => {
     if (selectedFilter === 'ALL') return true;
     if (selectedFilter === 'GOOD') return img.status === 'healthy';
@@ -111,10 +250,10 @@ export default function ImageAnalysisView({
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">
             <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900">
-              {isDemo ? 'Demo Data' : 'Live Model Result'}
+              {isDemo ? 'Demo Data' : 'Live CNN Model Result'}
             </span>
             <span className="text-slate-400">•</span>
-            <span>AI Bud Analysis (Batch Evaluation)</span>
+            <span>Yield Potential Classification</span>
           </div>
           <h2 className="text-xl md:text-2xl font-bold text-slate-900 font-display">
             Flower Bud Classification & Health
@@ -142,6 +281,169 @@ export default function ImageAnalysisView({
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      {/* Hero: AI FLOWER-BUD ANALYSIS — the classification result itself.
+          Prediction / confidence / both class probabilities / model identity
+          all come from actual per-image model output (spec §5-§7). */}
+      <div className="bg-white rounded-2xl p-5 md:p-6 border border-emerald-200/70 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>AI Flower-Bud Analysis</span>
+          </div>
+          <span
+            className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full border ${
+              isDemo
+                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            }`}
+          >
+            {isDemo ? 'Demo Data — ML service unavailable or demo samples' : 'Live CNN Model Result'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Prediction */}
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Predicted Yield Potential
+            </div>
+            <div
+              className={`font-display font-extrabold text-lg leading-tight ${
+                heroPrediction === 'Good Yield Potential'
+                  ? 'text-emerald-700'
+                  : heroPrediction === 'Poor Yield Potential'
+                  ? 'text-rose-600'
+                  : heroPrediction === 'Mixed'
+                  ? 'text-amber-600'
+                  : 'text-slate-500'
+              }`}
+            >
+              {heroPredictionLabel}
+            </div>
+            {!isSingle && total > 0 && heroPrediction !== 'Mixed' && (
+              <div className="text-xs text-slate-500 mt-1">
+                Majority class — {goodList.length} Good / {poorList.length} Poor of {total} samples
+              </div>
+            )}
+            {isSingle && (
+              <div className="text-xs text-slate-500 mt-1">
+                Single-sample classification
+              </div>
+            )}
+            {!isSingle && total > 0 && heroPrediction === 'Mixed' && (
+              <div className="text-xs text-slate-500 mt-1">
+                Tie between classes — no majority
+              </div>
+            )}
+          </div>
+
+          {/* Confidence */}
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Confidence
+            </div>
+            <div className="font-display font-extrabold text-lg text-slate-900">
+              {typeof heroConfidence === 'number' ? `${heroConfidence}%` : '—'}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              {!isSingle && typeof heroConfidence === 'number'
+                ? 'Average per-image softmax confidence'
+                : typeof heroConfidence === 'number'
+                ? 'Softmax output of the model'
+                : 'Not available'}
+            </div>
+          </div>
+
+          {/* Model */}
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Model
+            </div>
+            <div className="font-display font-extrabold text-lg text-slate-900">
+              MobileNetV3-small
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              {heroModelVersion ? `Version ${heroModelVersion}` : 'Version not recorded for demo samples'}
+            </div>
+          </div>
+        </div>
+
+        {/* Both class probabilities (§6): exact risk for a single image,
+            batch mean otherwise. */}
+        <div className="mt-4 rounded-xl border border-slate-100 p-4">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+            Class Probabilities{!isSingle && withRisk.length > 0 ? ` (mean of ${withRisk.length} sample${withRisk.length > 1 ? 's' : ''})` : ''}
+          </div>
+          {heroRisk ? (
+            <div className="space-y-2.5">
+              <div>
+                <div className="flex justify-between text-xs font-bold mb-1">
+                  <span className="text-emerald-700">GOOD {pct(heroRisk.goodYield)}</span>
+                  <span className="text-slate-400">Good Yield Potential</span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, heroRisk.goodYield * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs font-bold mb-1">
+                  <span className="text-rose-600">POOR {pct(heroRisk.poorYield)}</span>
+                  <span className="text-slate-400">Poor Yield Potential</span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full bg-rose-500 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, heroRisk.poorYield * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Not available for these samples.</p>
+          )}
+        </div>
+
+        {/* Aggregate row (§7) */}
+        <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase">Samples analyzed</div>
+            <div className="font-display font-extrabold text-slate-900">{total}</div>
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-emerald-600 uppercase">Good</div>
+            <div className="font-display font-extrabold text-emerald-700">{goodList.length}</div>
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-rose-500 uppercase">Poor</div>
+            <div className="font-display font-extrabold text-rose-600">{poorList.length}</div>
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-slate-400 uppercase">Good-potential ratio</div>
+            <div className="font-display font-extrabold text-slate-900">{goodPercent}%</div>
+          </div>
+        </div>
+
+        {/* Partial quality rejections (§11) — disclosed, never silently dropped */}
+        {rejectedCount > 0 && (
+          <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-3 flex gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-900 leading-relaxed">
+              <strong>{rejectedCount} sample{rejectedCount > 1 ? 's' : ''} rejected by quality checks.</strong>{' '}
+              Image quality is insufficient for reliable classification. Please upload a clearer image.
+              {' '}The results above cover the {total} sample{total !== 1 ? 's' : ''} that passed validation.
+              {Array.isArray(errors) && errors.length > 0 && (
+                <span className="block mt-1 text-amber-800">
+                  {errors.map((e, i) => `${e.filename || `Image ${i + 1}`}: ${e.message}`).join(' · ')}
+                </span>
+              )}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Summary Cards: Donut Chart + Drop Risk Factors */}
@@ -304,7 +606,8 @@ export default function ImageAnalysisView({
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     Produced by the rule engine from the 15-day climate projection — not by
-                    the image model. Yield range and advisories are shown below.
+                    the image model. Advisories are shown below; the rule-based tonnage
+                    estimate lives on the Yield Prediction page.
                   </p>
                 </div>
               </div>
@@ -313,57 +616,43 @@ export default function ImageAnalysisView({
         </div>
       </div>
 
-      {/* Farm-level outcome of this run (yield + advisories) — shown here so the
-          farmer does not have to navigate elsewhere to see the result */}
+      {/* Model & run provenance — Option A: the classification result page
+          never shows rule-based tonnage figures under a "Live Model Result"
+          badge (spec §9). The rule-based estimate lives on the Yield
+          Prediction page, clearly labelled there. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl p-5 border border-slate-100/90 shadow-xs">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="font-bold text-base text-slate-900 font-display">
-              Plot Yield Estimate
+              Model &amp; Run Info
             </h3>
-            {farmResult && (
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                farmResult.isDemo ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-              }`}>
-                {farmResult.isDemo ? 'Demo Data' : 'Live Model Result'}
-              </span>
-            )}
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+              Classification model only
+            </span>
           </div>
-
-          {farmResultLoading && !farmResult ? (
-            <p className="text-xs text-slate-400 mt-3">Loading plot estimate…</p>
-          ) : farmResult ? (
-            <div className="mt-3 space-y-2.5">
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-extrabold text-slate-900 font-display">
-                  {typeof farmResult.expectedYieldMin === 'number' &&
-                  typeof farmResult.expectedYieldMax === 'number'
-                    ? `${farmResult.expectedYieldMin} – ${farmResult.expectedYieldMax}`
-                    : 'Not available'}
-                </span>
-                <span className="text-xs font-semibold text-slate-500">
-                  {farmResult.yieldUnit || 'tonnes / acre'}
-                </span>
-              </div>
-              {typeof farmResult.totalPlotExpectedMin === 'number' && (
-                <p className="text-[11px] text-slate-500">
-                  Whole-plot estimate: {farmResult.totalPlotExpectedMin} –{' '}
-                  {farmResult.totalPlotExpectedMax} {farmResult.totalPlotUnit || 'tonnes total'}
-                </p>
-              )}
-              <p className="text-[11px] text-slate-500">
-                {farmResult.variety} · {farmResult.floweringStage} · season {farmResult.season || '—'}
-              </p>
-              <p className="text-[10px] text-slate-400">
-                Bud model: {farmResult.modelVersion?.budModel || '—'} · yield model:{' '}
-                {farmResult.modelVersion?.yieldModel || '—'}
-              </p>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 mt-3">
-              Plot estimate unavailable — the backend did not return a stored prediction.
+          <div className="mt-3 space-y-2.5">
+            <p className="text-[11px] text-slate-500">
+              Bud model:{' '}
+              <strong className="text-slate-700">
+                {heroModelVersion || modelVersion?.budModel || '—'}
+              </strong>{' '}
+              (MobileNetV3-small, 2-class)
             </p>
-          )}
+            <p className="text-[11px] text-slate-500">
+              Input 224×224 · ImageNet normalization · softmax over
+              Good/Poor Yield Potential.
+            </p>
+            {farmResult && (
+              <p className="text-[11px] text-slate-500">
+                {farmResult.variety} · {farmResult.floweringStage} · season{' '}
+                {farmResult.season || '—'}
+              </p>
+            )}
+            <p className="text-[10px] text-slate-400">
+              A rule-based tonnage estimate (not a trained yield model) is shown on the
+              Yield Prediction page, labelled as such.
+            </p>
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl p-5 border border-slate-100/90 shadow-xs">
@@ -398,7 +687,7 @@ export default function ImageAnalysisView({
               Sample Bud Classification Gallery
             </h3>
             <span className="text-xs text-slate-400 font-medium">
-              Click any sample to inspect bounding box detections and model confidence scores
+              Click any sample to inspect its class probabilities, quality metrics and confidence
             </span>
           </div>
 
@@ -441,13 +730,9 @@ export default function ImageAnalysisView({
             >
               {/* Photo Box */}
               <div className="relative aspect-4/3 overflow-hidden bg-slate-900">
-                <img
-                  src={img.url}
-                  alt={img.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+                <BudImage url={img.url} fallbackUrl={img.fallbackUrl} title={img.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
 
-                {/* Simulated Bounding Box Overlay */}
+                {/* Optional overlay (only present when the source supplies boxes) */}
                 {img.boxes && img.boxes[0] && (
                   <div 
                     className={`absolute border-2 rounded-lg pointer-events-none ${
@@ -506,6 +791,32 @@ export default function ImageAnalysisView({
                   {img.notes}
                 </p>
 
+                {/* Per-image class probabilities — only when the model returned them */}
+                {img.risk &&
+                  typeof img.risk.goodYield === 'number' &&
+                  typeof img.risk.poorYield === 'number' && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] font-bold">
+                      <span className="text-emerald-700">
+                        GOOD {(img.risk.goodYield * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-rose-600">
+                        POOR {(img.risk.poorYield * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden flex">
+                      <div
+                        className="h-full bg-emerald-500"
+                        style={{ width: `${Math.min(100, img.risk.goodYield * 100)}%` }}
+                      />
+                      <div
+                        className="h-full bg-rose-500"
+                        style={{ width: `${Math.min(100, img.risk.poorYield * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400">
                   <span>
                     Quality:{' '}
@@ -536,7 +847,7 @@ export default function ImageAnalysisView({
                   {activeModalImage.title}
                 </h4>
                 <div className="text-xs text-slate-500 font-medium">
-                  {activeModalImage.stage} • {isDemo ? 'Prototype Feature Map' : 'Live Model Inspection'}
+                  {activeModalImage.stage} • {isDemo ? 'Demo Sample Inspection' : 'Live Model Inspection'}
                 </div>
               </div>
               <button
@@ -547,13 +858,9 @@ export default function ImageAnalysisView({
               </button>
             </div>
 
-            {/* High-res Display with Bounding Boxes */}
+            {/* High-res Display */}
             <div className="relative aspect-16/10 bg-slate-950 flex items-center justify-center overflow-hidden">
-              <img
-                src={activeModalImage.url}
-                alt={activeModalImage.title}
-                className="w-full h-full object-contain"
-              />
+              <BudImage url={activeModalImage.url} fallbackUrl={activeModalImage.fallbackUrl} title={activeModalImage.title} className="w-full h-full object-contain" />
 
               {activeModalImage.boxes && activeModalImage.boxes[0] && (
                 <div 
@@ -587,14 +894,10 @@ export default function ImageAnalysisView({
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-slate-400 font-semibold uppercase">
-                    {activeModalImage.healthyBuds != null && activeModalImage.detectedBuds != null
-                      ? 'Floral Cluster Count'
-                      : 'Image Quality'}
+                    Image Quality
                   </span>
                   <div className="text-base font-extrabold text-emerald-700">
-                    {activeModalImage.healthyBuds != null && activeModalImage.detectedBuds != null
-                      ? `${activeModalImage.healthyBuds} Healthy / ${activeModalImage.detectedBuds} Total`
-                      : activeModalImage.quality
+                    {activeModalImage.quality
                       ? `${activeModalImage.quality.is_valid ? 'Passed' : 'Failed'}${
                           typeof activeModalImage.quality.blur_score === 'number'
                             ? ` • Blur ${Math.round(activeModalImage.quality.blur_score)}`
@@ -604,6 +907,45 @@ export default function ImageAnalysisView({
                   </div>
                 </div>
               </div>
+
+              {/* Both class probabilities for this image (§6) */}
+              {activeModalImage.risk &&
+                typeof activeModalImage.risk.goodYield === 'number' &&
+                typeof activeModalImage.risk.poorYield === 'number' && (
+                <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+                  <span className="text-xs text-slate-400 font-semibold uppercase">
+                    Class Probabilities
+                  </span>
+                  <div>
+                    <div className="flex justify-between text-xs font-bold mb-1">
+                      <span className="text-emerald-700">
+                        GOOD {(activeModalImage.risk.goodYield * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-slate-400">Good Yield Potential</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{ width: `${Math.min(100, activeModalImage.risk.goodYield * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs font-bold mb-1">
+                      <span className="text-rose-600">
+                        POOR {(activeModalImage.risk.poorYield * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-slate-400">Poor Yield Potential</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className="h-full bg-rose-500 rounded-full"
+                        style={{ width: `${Math.min(100, activeModalImage.risk.poorYield * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="p-3 rounded-xl bg-slate-50 text-xs text-slate-700 border border-slate-200">
                 <span className="font-bold">Agronomist Observation: </span>

@@ -11,89 +11,115 @@ export const mockPredictionService = {
         return { ...data, isDemo: data.isDemo === true };
       }
     } catch (err) {
-      // Fallback
+      // Fallback — use last cached analysis from localStorage so real analysis
+      // results survive a momentary API outage.
     }
+
+    // Try to reconstruct from the last analysis result cached in localStorage.
+    // NewAnalysisWizard writes 'mangosense_last_analysis' on every successful run.
+    let cached = null;
+    try {
+      const raw = localStorage.getItem('mangosense_last_analysis');
+      if (raw) cached = JSON.parse(raw);
+    } catch {
+      cached = null;
+    }
+
+    if (cached && cached.yieldEstimation) {
+      const ye = cached.yieldEstimation;
+      const summary = cached.summary || {};
+      const goodCount = summary.goodYieldCount ?? 0;
+      const poorCount = summary.poorYieldCount ?? 0;
+      const total = goodCount + poorCount;
+      const goodRatio = total > 0 ? Math.round((goodCount / total) * 100) : null;
+      const health = typeof summary.overallHealthScore === 'number' ? summary.overallHealthScore : null;
+      const dropRisk = summary.flowerDropRisk || 'Moderate';
+      const avg = ye.expectedYieldAverage;
+
+      return {
+        isDemo: true,
+        predictionId: 'pred-offline-cache',
+        generatedAt: cached.analysisDate || null,
+        plotId,
+        variety: cached.variety || 'Alphonso (Hapus)',
+        expectedYieldMin: ye.expectedYieldMin,
+        expectedYieldMax: ye.expectedYieldMax,
+        expectedYieldAverage: avg,
+        yieldUnit: ye.yieldUnit || 'tonnes / acre',
+        totalPlotExpectedMin: ye.totalPlotExpectedMin,
+        totalPlotExpectedMax: ye.totalPlotExpectedMax,
+        totalPlotUnit: 'tonnes total',
+        predictionLabel: 'Offline Estimate (cached)',
+        confidenceNote: 'Offline cache — backend unreachable. Showing last known analysis result.',
+        factors: {
+          budHealth: {
+            label: 'Bud Health',
+            value: health !== null ? `${health}% healthy` : 'Not measured',
+            percentage: health,
+            impact: goodRatio !== null ? `${goodCount} Good / ${poorCount} Poor of ${total} samples (${goodRatio}% good ratio)` : '—',
+            status: health !== null && health >= 75 ? 'favorable' : 'warning',
+            badge: health !== null && health >= 75 ? 'Good quality panicles' : 'Below threshold'
+          },
+          flowerDropRisk: {
+            label: 'Flower Drop Risk',
+            value: dropRisk,
+            percentage: dropRisk === 'Low' ? 15 : dropRisk === 'High' ? 65 : 35,
+            impact: goodRatio !== null ? `Derived from ${goodRatio}% good-yield ratio` : 'Based on cached data',
+            status: dropRisk === 'Low' ? 'favorable' : 'warning',
+            badge: dropRisk === 'Low' ? 'Low risk' : dropRisk === 'High' ? 'Elevated' : 'Monitor conditions'
+          },
+          climate: {
+            label: 'Climate Condition',
+            value: 'See Climate page',
+            percentage: 70,
+            impact: 'Check live weather for current conditions',
+            status: 'favorable',
+            badge: 'Check live weather'
+          },
+          pestRisk: {
+            label: 'Pest Risk',
+            value: poorCount > 0 ? 'Low–Moderate' : 'Low',
+            percentage: poorCount > 0 ? 25 : 10,
+            impact: poorCount > 0 ? 'Poor-yield signal detected in cached analysis' : 'Normal',
+            status: 'favorable',
+            badge: 'Normal'
+          }
+        },
+        yieldDistribution: avg != null ? [
+          { scenario: 'Severe Drop Risk',       yield: +(avg * 0.75).toFixed(1), probability: 10,  fill: '#ef4444' },
+          { scenario: 'Sub-optimal Weather',    yield: +(avg * 0.90).toFixed(1), probability: 25,  fill: '#f59e0b' },
+          { scenario: 'Current Forecast Range', yield: avg,                       probability: 85,  fill: '#15803d', isCurrent: true },
+          { scenario: 'Optimised Management',   yield: +(avg * 1.20).toFixed(1), probability: 45,  fill: '#10b981' }
+        ] : [],
+        stageMilestones: [
+          { stage: 'Flower Bud Emergence',          date: 'Early Season',  status: 'Completed',   health: health !== null ? `${health}% observed` : '—' },
+          { stage: 'Panicle Elongation (Current)',  date: 'Active Stage',  status: 'In Progress', health: health !== null ? `${health}% healthy` : '—' },
+          { stage: 'Full Anthesis & Pollination',   date: 'Upcoming',      status: 'Upcoming',    health: 'Pending next analysis' },
+          { stage: 'Fruitlet Set (Pea Stage)',       date: 'Upcoming',      status: 'Upcoming',    health: 'Pending' },
+          { stage: 'Harvesting',                    date: 'End of Season', status: 'Projected',   health: avg != null ? `Target: ${avg} t/acre (cached)` : 'Pending' }
+        ]
+      };
+    }
+
+    // No cached analysis — show a neutral placeholder (no hardcoded 78% or 4.8-5.4).
     return {
       isDemo: true,
-      predictionId: 'pred-20260824-a',
-      generatedAt: '24 Aug 2026, 09:30 AM',
-      plotId: plotId,
-      plotName: 'Plot A — 2.5 acres',
+      predictionId: 'pred-no-analysis',
+      generatedAt: null,
+      plotId,
       variety: 'Alphonso (Hapus)',
-      
-      // Central Yield Metric
-      expectedYieldMin: 4.8,
-      expectedYieldMax: 5.4,
-      expectedYieldAverage: 5.1,
+      expectedYieldMin: null,
+      expectedYieldMax: null,
+      expectedYieldAverage: null,
       yieldUnit: 'tonnes / acre',
-      totalPlotExpectedMin: 12.0, // 4.8 * 2.5
-      totalPlotExpectedMax: 13.5, // 5.4 * 2.5
+      totalPlotExpectedMin: null,
+      totalPlotExpectedMax: null,
       totalPlotUnit: 'tonnes total',
-
-      // Status
-      predictionLabel: 'Prototype Prediction',
-      confidenceNote: 'Prototype estimation based on multi-sample bud classification and 15-day climate projection.',
-
-      // Core Factors
-      factors: {
-        budHealth: {
-          label: 'Bud Health',
-          value: '78% healthy',
-          percentage: 78,
-          impact: '+18% vs poor bud baseline',
-          status: 'favorable',
-          badge: 'High Quality Panicles'
-        },
-        climate: {
-          label: 'Climate Condition',
-          value: 'Favorable',
-          percentage: 82,
-          impact: '+12% optimal anthesis window',
-          status: 'favorable',
-          badge: 'Optimal Temperature'
-        },
-        flowerDropRisk: {
-          label: 'Flower Drop Risk',
-          value: 'Moderate',
-          percentage: 35,
-          impact: '-9% potential yield loss if untreated',
-          status: 'warning',
-          badge: 'Monitor Rain & Wind'
-        },
-        pestRisk: {
-          label: 'Pest Risk',
-          value: 'Low – Moderate',
-          percentage: 22,
-          impact: '-4% localized hopper pressure',
-          status: 'favorable',
-          badge: 'Early Stage Detected'
-        }
-      },
-
-      // Historical comparison & variety benchmark
-      benchmark: {
-        varietyHistoricalAverage: 4.6,
-        farmLastYearYield: 4.5,
-        regionalBenchmark: 4.2,
-        differenceFromLastYear: '+13.3%'
-      },
-
-      // Range simulation for chart
-      yieldDistribution: [
-        { scenario: 'Severe Drop Risk', yield: 3.8, probability: 10, fill: '#ef4444' },
-        { scenario: 'Sub-optimal Weather', yield: 4.4, probability: 25, fill: '#f59e0b' },
-        { scenario: 'Current Forecast Range', yield: 5.1, probability: 85, fill: '#15803d', isCurrent: true },
-        { scenario: 'Optimized Management', yield: 5.8, probability: 45, fill: '#10b981' },
-      ],
-
-      // Timeline prediction
-      stageMilestones: [
-        { stage: 'Flower Bud Emergence', date: 'Early August', status: 'Completed', health: '82%' },
-        { stage: 'Panicle Elongation (Current)', date: 'Late August', status: 'In Progress', health: '78%' },
-        { stage: 'Full Anthesis & Pollination', date: 'Early September', status: 'Upcoming', health: 'Estimated 75%' },
-        { stage: 'Fruitlet Set (Pea Stage)', date: 'Mid September', status: 'Upcoming', health: 'Pending' },
-        { stage: 'Harvesting', date: 'Late October - November', status: 'Projected', health: 'Target: 5.1 t/acre' }
-      ]
+      predictionLabel: 'No Analysis Yet',
+      confidenceNote: 'Run a new bud analysis to generate your first yield prediction.',
+      factors: {},
+      yieldDistribution: [],
+      stageMilestones: []
     };
   },
 

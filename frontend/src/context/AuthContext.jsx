@@ -51,6 +51,9 @@ export function AuthProvider({ children }) {
       return undefined;
     }
     let cancelled = false;
+    // Check whether the stored session was a demo session BEFORE the async
+    // call overwrites state — we need to preserve the demo flag if so.
+    const wasDemo = localStorage.getItem(DEMO_KEY) === 'true';
 
     apiClient
       .get('/auth/me')
@@ -58,10 +61,11 @@ export function AuthProvider({ children }) {
         if (cancelled) return;
         const nextUser = (res && res.user) || res;
         if (nextUser && (nextUser.email || nextUser.id)) {
-          setUser(nextUser);
-          setDemoMode(false);
-          localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
-          localStorage.removeItem(DEMO_KEY);
+          const restoredUser = wasDemo ? { ...nextUser, isDemo: true } : nextUser;
+          setUser(restoredUser);
+          setDemoMode(wasDemo);
+          localStorage.setItem(USER_KEY, JSON.stringify(restoredUser));
+          if (!wasDemo) localStorage.removeItem(DEMO_KEY);
         } else {
           clearSession();
           setError('Could not restore your session. Please sign in again.');
@@ -133,23 +137,43 @@ export function AuthProvider({ children }) {
   }, [clearSession]);
 
   /**
-   * Offline demo mode — no token, no backend. Clearly labelled everywhere it
-   * surfaces (LoginView button copy + TopBar "Demo Mode" pill) so demo data is
-   * never mistaken for a live session.
+   * Demo mode — tries to get a real signed JWT from POST /auth/demo so that
+   * authenticated endpoints (e.g. POST /predictions/bud) accept requests from
+   * the demo session.  Falls back to the original token-free offline mode when
+   * the backend is unreachable so the app still works without a server.
    */
-  const enterDemoMode = useCallback(() => {
-    const demoUser = {
-      id: 'demo-user',
-      name: 'Demo Farmer',
-      email: 'demo@mangosense.local',
-      isDemo: true
-    };
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.setItem(USER_KEY, JSON.stringify(demoUser));
-    localStorage.setItem(DEMO_KEY, 'true');
-    setUser(demoUser);
-    setDemoMode(true);
+  const enterDemoMode = useCallback(async () => {
     setError(null);
+    const offlineFallback = () => {
+      const demoUser = {
+        id: 'demo-user',
+        name: 'Demo Farmer',
+        email: 'demo@mangosense.local',
+        isDemo: true
+      };
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.setItem(USER_KEY, JSON.stringify(demoUser));
+      localStorage.setItem(DEMO_KEY, 'true');
+      setUser(demoUser);
+      setDemoMode(true);
+    };
+
+    try {
+      const data = await apiClient.post('/auth/demo', {});
+      if (data && data.token && data.user) {
+        // Real JWT obtained — store it so apiClient attaches it to every request.
+        localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify({ ...data.user, isDemo: true }));
+        localStorage.setItem(DEMO_KEY, 'true');
+        setUser({ ...data.user, isDemo: true });
+        setDemoMode(true);
+      } else {
+        offlineFallback();
+      }
+    } catch {
+      // Backend unreachable — degrade gracefully to token-free offline mode.
+      offlineFallback();
+    }
   }, []);
 
   const value = useMemo(

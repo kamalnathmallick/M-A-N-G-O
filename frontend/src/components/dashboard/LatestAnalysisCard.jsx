@@ -72,7 +72,7 @@ export default function LatestAnalysisCard({
                 <button
                   onClick={onViewDetailedClassification}
                   className="w-6 h-6 rounded-full bg-white/80 hover:bg-white text-slate-800 flex items-center justify-center transition-colors"
-                  title="Zoom and inspect bud bounding boxes"
+                  title="Open the detailed classification view"
                 >
                   <Maximize2 className="w-3 h-3" />
                 </button>

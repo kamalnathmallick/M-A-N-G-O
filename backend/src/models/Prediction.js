@@ -150,6 +150,21 @@ const predictionSchema = new mongoose.Schema(
       yieldModel: { type: String, default: 'mangosense-yield-v1' }
     },
 
+    // CNN sample counts — stored here so downstream services (recommendations,
+    // dashboard) can read them without a separate HistoryRecord lookup.
+    sampleCount: {
+      type: Number
+    },
+    goodYieldCount: {
+      type: Number
+    },
+    poorYieldCount: {
+      type: Number
+    },
+    confidence: {
+      type: Number
+    },
+
     isDemo: {
       type: Boolean,
       default: true

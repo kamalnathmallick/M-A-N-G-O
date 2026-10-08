@@ -325,6 +325,8 @@ function AppShell() {
               images={analysisImages}
               isDemo={analysisResult ? analysisResult.isDemo === true : true}
               analysisSummary={analysisResult?.summary || null}
+              modelVersion={analysisResult?.modelVersion || null}
+              errors={analysisResult?.errors || []}
               onContinueToYield={() => setActiveTab('yield')}
               onStartNewAnalysis={() => setActiveTab('new-analysis')}
             />

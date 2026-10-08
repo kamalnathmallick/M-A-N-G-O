@@ -3,6 +3,14 @@
 // Demo samples (no real File objects) take the explicitly-simulated path and
 // are flagged isDemo:true. Backend failures for real uploads are propagated to
 // the caller instead of silently degrading to simulation.
+//
+// Contract §0: the dataset is binary (GOOD -> "Good Yield Potential" /
+// healthy, BAD -> "Poor Yield Potential" / poor_yield). No bounding boxes or
+// bud counts exist, so demo samples never carry `boxes`, `detectedBuds`,
+// `healthyBuds` or `affectedBuds` either — the same rule as the ML service.
+// Demo `risk` values are derived from each sample's stated demo confidence so
+// the probability display has something consistent to show; the whole page is
+// labelled Demo Data while these samples are on screen.
 
 export const SAMPLE_BUD_IMAGES = [
   {
@@ -11,16 +19,11 @@ export const SAMPLE_BUD_IMAGES = [
     fallbackUrl: '/samples/mango_sample_1.jpg',
     title: 'Panicle Sample #1 (North Canopy)',
     stage: 'Panicle Elongation & Bloom',
-    classification: 'Healthy Bud',
+    classification: 'Good Yield Potential',
     confidence: 94.2,
     status: 'healthy',
-    detectedBuds: 45,
-    healthyBuds: 42,
-    affectedBuds: 3,
-    notes: 'Vigorous terminal axis elongation with uniform floral branching and zero anthracnose lesions.',
-    boxes: [
-      { x: 25, y: 15, width: 50, height: 60, label: 'Healthy Panicle', score: 0.95, status: 'healthy' }
-    ]
+    risk: { goodYield: 0.942, poorYield: 0.058 },
+    notes: 'Vigorous terminal axis elongation with uniform floral branching (demo sample).'
   },
   {
     id: 'img-2',
@@ -28,16 +31,11 @@ export const SAMPLE_BUD_IMAGES = [
     fallbackUrl: '/samples/mango_sample_2.jpg',
     title: 'Panicle Sample #2 (East Canopy)',
     stage: 'Early Fruitlet Setting',
-    classification: 'Healthy Bud',
+    classification: 'Good Yield Potential',
     confidence: 91.8,
     status: 'healthy',
-    detectedBuds: 48,
-    healthyBuds: 44,
-    affectedBuds: 4,
-    notes: 'Uniform pea-stage fruitlet emergence on healthy reddish rachis branches.',
-    boxes: [
-      { x: 18, y: 20, width: 48, height: 65, label: 'Fruitlet Cluster', score: 0.93, status: 'healthy' }
-    ]
+    risk: { goodYield: 0.918, poorYield: 0.082 },
+    notes: 'Uniform pea-stage development on healthy reddish rachis branches (demo sample).'
   },
   {
     id: 'img-3',
@@ -45,16 +43,11 @@ export const SAMPLE_BUD_IMAGES = [
     fallbackUrl: '/samples/mango_sample_3.jpg',
     title: 'Panicle Sample #3 (Inner Canopy)',
     stage: 'Active Bloom & Anthesis',
-    classification: 'Pest Risk (Mango Hopper)',
+    classification: 'Poor Yield Potential',
     confidence: 83.5,
-    status: 'pest_risk',
-    detectedBuds: 42,
-    healthyBuds: 30,
-    affectedBuds: 12,
-    notes: 'Honeydew deposition and hopper activity suspected along secondary rachis branches.',
-    boxes: [
-      { x: 22, y: 28, width: 55, height: 50, label: 'Hopper Activity', score: 0.84, status: 'pest_risk' }
-    ]
+    status: 'poor_yield',
+    risk: { goodYield: 0.165, poorYield: 0.835 },
+    notes: 'Uneven development observed along secondary rachis branches (demo sample).'
   },
   {
     id: 'img-4',
@@ -62,16 +55,11 @@ export const SAMPLE_BUD_IMAGES = [
     fallbackUrl: '/samples/mango_sample_4.png',
     title: 'Panicle Sample #4 (South Edge)',
     stage: 'Late Bloom & Desiccation Check',
-    classification: 'Flower Drop Risk',
+    classification: 'Poor Yield Potential',
     confidence: 86.4,
-    status: 'drop_risk',
-    detectedBuds: 38,
-    healthyBuds: 24,
-    affectedBuds: 14,
-    notes: 'Dry brownish floret desiccation with early flower drop risk detected on terminal cluster.',
-    boxes: [
-      { x: 20, y: 25, width: 60, height: 65, label: 'Desiccated Florets', score: 0.87, status: 'drop_risk' }
-    ]
+    status: 'poor_yield',
+    risk: { goodYield: 0.136, poorYield: 0.864 },
+    notes: 'Dry brownish floret desiccation with early flower drop signs (demo sample).'
   }
 ];
 
@@ -168,11 +156,13 @@ export const mockImageAnalysisService = {
       const resultImages = Array.isArray(res.images) ? res.images : [];
       if (resultImages.length === 0) {
         // Never fabricate a sample analysis when real images were submitted.
+        // Required sentence (spec §11) comes first; per-image detail follows.
         const firstError =
           Array.isArray(res.errors) && res.errors.length > 0 ? res.errors[0].message : null;
         throw new Error(
-          firstError ||
-            'None of the uploaded images passed quality checks. Please upload clearer bud photos.'
+          firstError
+            ? `Image quality is insufficient for reliable classification. Please upload a clearer image. ${firstError}`
+            : 'Image quality is insufficient for reliable classification. Please upload a clearer image.'
         );
       }
 
@@ -193,6 +183,9 @@ export const mockImageAnalysisService = {
 
     // ------------------------------------------------------------------
     // Demo-samples path: legitimate offline simulation, flagged isDemo:true.
+    // Aggregates below are computed from the demo samples' own labels,
+    // confidences and risk values — no hardcoded confidence, no fabricated
+    // bud counts (contract §0), no bounding boxes.
     // ------------------------------------------------------------------
     const total = images.length || 4;
     const results = [];
@@ -213,12 +206,26 @@ export const mockImageAnalysisService = {
       results.push(sample);
     }
 
-    const totalBuds = results.reduce((acc, r) => acc + (r.detectedBuds || 40), 0);
-    const healthyBuds = results.reduce((acc, r) => acc + (r.healthyBuds || 32), 0);
-    const affectedBuds = totalBuds - healthyBuds;
-    const healthPercentage = Math.round((healthyBuds / totalBuds) * 100);
-
+    const n = results.length || 1;
     const goodCount = results.filter((r) => r.status === 'healthy').length;
+    const goodPct = Math.round((goodCount / n) * 100);
+
+    // overallHealthScore = round(mean P(GOOD) * 100), same rule as contract §2
+    const risks = results
+      .map((r) => r.risk?.goodYield)
+      .filter((v) => typeof v === 'number' && !Number.isNaN(v));
+    const overallHealthScore = risks.length
+      ? Math.round((risks.reduce((acc, v) => acc + v, 0) / risks.length) * 100)
+      : goodPct;
+
+    // confidenceScore = mean per-image confidence (one decimal) — measured,
+    // never a hardcoded 89.2.
+    const confidences = results
+      .map((r) => r.confidence)
+      .filter((v) => typeof v === 'number' && !Number.isNaN(v));
+    const confidenceScore = confidences.length
+      ? +(confidences.reduce((acc, v) => acc + v, 0) / confidences.length).toFixed(1)
+      : null;
 
     return {
       success: true,
@@ -226,18 +233,16 @@ export const mockImageAnalysisService = {
       analysisTimestamp: new Date().toISOString(),
       summary: {
         totalImagesAnalyzed: results.length,
-        totalBudsDetected: totalBuds,
-        healthyBudsCount: healthyBuds,
-        affectedBudsCount: affectedBuds,
-        overallHealthScore: healthPercentage,
+        overallHealthScore,
         distribution: {
-          goodPercentage: Math.round((goodCount / results.length) * 100),
-          poorPercentage: 100 - Math.round((goodCount / results.length) * 100),
-          goodRatio: Math.round((goodCount / results.length) * 100),
-          poorRatio: 100 - Math.round((goodCount / results.length) * 100)
+          goodPercentage: goodPct,
+          poorPercentage: 100 - goodPct,
+          goodRatio: goodPct,
+          poorRatio: 100 - goodPct
         },
-        flowerDropRisk: healthPercentage >= 80 ? 'Low' : healthPercentage >= 70 ? 'Moderate' : 'High',
-        confidenceScore: 89.2
+        flowerDropRisk:
+          overallHealthScore >= 80 ? 'Low' : overallHealthScore >= 70 ? 'Moderate' : 'High',
+        confidenceScore
       },
       images: results
     };

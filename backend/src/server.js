@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
+import http from 'http';
 import { fileURLToPath } from 'url';
 
 import { env } from './config/env.js';
@@ -20,6 +21,7 @@ import historyRoutes from './routes/historyRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import imageRoutes from './routes/imageRoutes.js';
+import mlRoutes from './routes/mlRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -100,10 +102,36 @@ app.use('/api/history', historyRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/images', imageRoutes);
+app.use('/api/ml', mlRoutes);
 
 // Error handlers
 app.use(notFound);
 app.use(errorHandler);
+
+/**
+ * Probe whether something already listening on PORT is the MangoSense backend.
+ * Returns 'mangosense' | 'other' | 'unreachable'.
+ */
+const probeExistingServer = (port) =>
+  new Promise((resolve) => {
+    const req = http.get(
+      { hostname: 'localhost', port, path: '/api/health', timeout: 2000 },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(body);
+            resolve(json && json.service === 'MangoSense MEAN Backend' ? 'mangosense' : 'other');
+          } catch {
+            resolve('other');
+          }
+        });
+      }
+    );
+    req.on('error', () => resolve('unreachable'));
+    req.on('timeout', () => { req.destroy(); resolve('unreachable'); });
+  });
 
 // Start server
 const startServer = async () => {
@@ -113,6 +141,38 @@ const startServer = async () => {
 
     const server = app.listen(env.PORT, () => {
       console.log(`[MangoSense Backend] Running on http://localhost:${env.PORT} in ${env.NODE_ENV} mode`);
+    });
+
+    // Handle port conflicts cleanly so nodemon does not enter a crash-restart loop.
+    // - EADDRINUSE + healthy MangoSense already there → exit(0) (clean stop, nodemon won't restart)
+    // - EADDRINUSE + unknown process                  → exit(1) with diagnostic (nodemon waits for file change)
+    // - Any other server error                        → exit(1) with full details
+    server.on('error', async (err) => {
+      if (err.code === 'EADDRINUSE') {
+        const who = await probeExistingServer(env.PORT);
+        if (who === 'mangosense') {
+          console.log(
+            `\n[MangoSense Backend] Already running on port ${env.PORT} — no second server needed.\n` +
+            `  The existing backend is healthy. This process will exit cleanly.\n` +
+            `  If you want to restart, stop the existing process first:\n` +
+            `      Windows:  netstat -ano | findstr :${env.PORT}   then   Stop-Process -Id <PID>\n` +
+            `      Linux/Mac: lsof -ti :${env.PORT} | xargs kill\n`
+          );
+          process.exit(0); // clean exit — nodemon will NOT restart on exit code 0
+        } else {
+          console.error(
+            `\n[MangoSense Backend] ERROR: Port ${env.PORT} is already in use by another application.\n` +
+            `  Identify and stop that process, then run 'npm run dev' again:\n` +
+            `      Windows:  netstat -ano | findstr :${env.PORT}\n` +
+            `      Linux/Mac: lsof -i :${env.PORT}\n` +
+            `  Do NOT change the port — the frontend expects the backend on port ${env.PORT}.\n`
+          );
+          process.exit(1);
+        }
+      } else {
+        console.error('[MangoSense Backend] Server error:', err);
+        process.exit(1);
+      }
     });
 
     return server;

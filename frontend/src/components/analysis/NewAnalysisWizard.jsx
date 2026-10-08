@@ -307,7 +307,7 @@ export default function NewAnalysisWizard({
                 : pct >= 65
                 ? 'Fusing climatic data & 15-day rainfall projection…'
                 : pct >= 35
-                ? 'Simulating CNN feature extraction & panicle segmentation…'
+                ? 'Simulating CNN preprocessing & bud classification…'
                 : 'Preprocessing multi-canopy flower bud samples…'
             );
           }
@@ -327,6 +327,20 @@ export default function NewAnalysisWizard({
       setAnalysisProgress(100);
       setAnalysisStepLabel('Finalizing farm recommendations…');
       setAnalyzing(false);
+
+      // Cache the analysis result in localStorage so the offline fallback in
+      // mockPredictionService can reconstruct real yield/health data if the API
+      // is momentarily unavailable on the Yield Prediction page.
+      try {
+        localStorage.setItem('mangosense_last_analysis', JSON.stringify({
+          ...result,
+          variety: mangoVariety,
+          analysisDate,
+          cachedAt: new Date().toISOString()
+        }));
+      } catch {
+        // localStorage may be unavailable in private browsing — non-fatal.
+      }
 
       if (onAnalysisCompleted) {
         onAnalysisCompleted({

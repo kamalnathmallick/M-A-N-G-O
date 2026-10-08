@@ -202,6 +202,43 @@ test('Health check endpoint returns healthy status', async () => {
   assert.ok(json.mlService);
 });
 
+test('ML info: GET /ml/info is public and always reports an { available } flag', async () => {
+  // Public endpoint (mirrors /api/health): no token required — the Research
+  // page must render an honest state even in demo mode without a session.
+  const r = await api('/ml/info');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.success, true);
+  const data = r.json.data;
+  assert.ok(data, 'data envelope must be present');
+  assert.equal(typeof data.available, 'boolean', 'available flag must be a boolean');
+
+  if (data.available) {
+    // ML service online: metrics come from evaluation_report.json on disk.
+    const info = data.info;
+    assert.ok(info, 'info must accompany available:true');
+    assert.equal(typeof info.modelVersion, 'string');
+    assert.equal(info.backbone, 'mobilenet_v3_small');
+    assert.equal(info.numClasses, 2);
+    assert.deepEqual(info.inputSize, [224, 224]);
+    assert.equal(info.weightsLoaded, true, 'checkpoint must be loaded in this suite');
+    // Dataset counts are read from disk: 16 total (GOOD 10 / BAD 6).
+    assert.equal(info.dataset?.totalImages, 16);
+    assert.equal(info.dataset?.classCounts?.GOOD, 10);
+    assert.equal(info.dataset?.classCounts?.BAD, 6);
+    // Evaluation numbers must match the recorded report — no fabrication.
+    assert.equal(info.evaluation?.metrics?.accuracy, 0.75);
+    assert.equal(info.evaluation?.metrics?.f1Macro, 0.4286);
+    assert.deepEqual(info.evaluation?.confusionMatrix, [[3, 0], [1, 0]]);
+    // Yield: rule engine only — never claims a trained regressor.
+    assert.equal(info.yieldModel?.trained, false);
+    assert.equal(info.yieldModel?.kind, 'rule-engine');
+  } else {
+    // ML service offline: must NOT invent metrics.
+    assert.equal(data.info ?? null, null);
+    assert.ok(data.reason, 'unavailable responses must explain why');
+  }
+});
+
 const probeCors = (origin) =>
   new Promise((resolve, reject) => {
     const reqHttp = http.request(
@@ -517,7 +554,16 @@ test('Recommendations: GET /recommendations requires auth and returns rule outpu
   const r = await api('/recommendations', { token: userA.token });
   assert.equal(r.status, 200);
   assert.ok(Array.isArray(r.json.data));
-  assert.ok(r.json.data.length >= 3, `expected rule-generated recommendations, got ${r.json.data.length}`);
+  // Deterministic baseline: with no stored prediction for a fresh user the
+  // metrics are budHealth 78 / pestPressureScore 1, so exactly two rules ALWAYS
+  // match. rain & mildew advisories depend on LIVE Open-Meteo weather
+  // (WEATHER_PROVIDER=openmeteo: rainProb >= 60 or humidity >= 85) and may add
+  // more — never fewer. Asserting >= 3 here made the suite fail whenever the
+  // real weather was calm, which is not a code regression.
+  const ids = r.json.data.map((rec) => rec.id);
+  assert.ok(r.json.data.length >= 2, `expected rule-generated recommendations, got ${r.json.data.length}`);
+  assert.ok(ids.includes('rule-healthy-bloom-pollination'), 'baseline pollination rule must match');
+  assert.ok(ids.includes('rule-pest-pressure-monitoring'), 'baseline pest rule must match');
   const rec = r.json.data[0];
   for (const key of ['id', 'category', 'title', 'priority', 'priorityColor', 'shortText', 'fullExplanation', 'actionRequired', 'timing', 'icon', 'badge', 'organicAlternative']) {
     assert.ok(key in rec, `recommendation missing key: ${key}`);

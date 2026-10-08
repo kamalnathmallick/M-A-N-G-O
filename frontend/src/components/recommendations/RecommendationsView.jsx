@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { 
-  Lightbulb, 
-  Droplets, 
-  Bug, 
-  CloudRain, 
-  Sprout, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Clock, 
-  Share2, 
-  Check, 
-  Printer, 
-  Filter, 
-  Leaf 
+import {
+  Lightbulb,
+  Droplets,
+  Bug,
+  CloudRain,
+  Sprout,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Share2,
+  Check,
+  Printer,
+  Filter,
+  Leaf,
+  Info
 } from 'lucide-react';
 
 export default function RecommendationsView({ recommendations = [], overallRisk, onStartNewAnalysis }) {
@@ -225,6 +226,12 @@ export default function RecommendationsView({ recommendations = [], overallRisk,
                     <p className="text-xs sm:text-sm font-semibold text-slate-700 mt-1">
                       {rec.shortText}
                     </p>
+                    {rec.detectedContext && (
+                      <div className="flex items-start gap-1.5 mt-2 text-[11px] font-medium text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1.5">
+                        <Info className="w-3 h-3 mt-0.5 shrink-0 text-blue-500" />
+                        <span>{rec.detectedContext}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Detailed Explanation */}

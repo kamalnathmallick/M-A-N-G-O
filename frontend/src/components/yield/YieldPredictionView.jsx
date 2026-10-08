@@ -114,6 +114,16 @@ export default function YieldPredictionView({
   // Live result when available, explicitly-labelled offline estimate otherwise
   const dynamicYield = simResult || offlineYield;
 
+  // Honest provenance of the tonnage figures below: there is NO trained yield
+  // model (spec §9/§10). The rule engine marks its payload `trained:false` /
+  // `method` / a rule model version; anything absent also means "not trained",
+  // so the default is always rule-based until a real trained model says so.
+  const yieldModelVersion = dynamicYield?.modelVersion?.yieldModel;
+  const isRuleBasedYield =
+    dynamicYield?.trained !== true ||
+    (typeof dynamicYield?.method === 'string' && dynamicYield.method.toLowerCase().includes('rule')) ||
+    (typeof yieldModelVersion === 'string' && yieldModelVersion.toLowerCase().includes('rule'));
+
   const totalMinTonnes = (dynamicYield.expectedYieldMin * plotAcres).toFixed(1);
   const totalMaxTonnes = (dynamicYield.expectedYieldMax * plotAcres).toFixed(1);
 
@@ -156,16 +166,22 @@ export default function YieldPredictionView({
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">
             <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-extrabold">
-              {isDemoPrediction ? 'Demo Data' : 'Live Model Result'}
+              {isDemoPrediction
+                ? 'Demo Data'
+                : isRuleBasedYield
+                ? 'Rule-Based Estimate'
+                : 'Live Model Result'}
             </span>
             <span className="text-slate-400">•</span>
-            <span>Early Flowering Stage Yield Model</span>
+            <span>Yield Estimate — Not a Trained Model</span>
           </div>
           <h2 className="text-xl md:text-2xl font-bold text-slate-900 font-display">
             Farm Yield Prediction — {predictionData?.plotName || 'Plot A (2.5 Acres)'}
           </h2>
           <p className="text-xs md:text-sm text-slate-500 font-medium">
-            AI-correlated early estimate combining multi-sample bud health, flower retention index & 15-day weather.
+            {isRuleBasedYield
+              ? 'Rule-based estimate combining measured bud health, flower retention index & 15-day weather. The classification CNN does NOT predict tonnage.'
+              : 'AI-correlated early estimate combining multi-sample bud health, flower retention index & 15-day weather.'}
           </p>
         </div>
 
@@ -194,7 +210,11 @@ export default function YieldPredictionView({
           <div className="lg:col-span-6 space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100/90 text-emerald-950 text-xs font-bold border border-emerald-300">
               <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Early Flowering Prediction Output</span>
+              <span>
+                {isRuleBasedYield
+                  ? 'Rule-Based Estimate — Not a Trained Yield Model'
+                  : 'Early Flowering Prediction Output'}
+              </span>
             </div>
 
             <div className="flex items-baseline gap-2">
@@ -455,7 +475,7 @@ export default function YieldPredictionView({
                 <span className="text-slate-400">Running live yield simulation…</span>
               )}
               {simStatus === 'live' && (
-                <span className="text-emerald-300">Live backend simulation</span>
+                <span className="text-emerald-300">Backend rule engine — live response</span>
               )}
               {simStatus === 'offline' && (
                 <span className="text-amber-300">

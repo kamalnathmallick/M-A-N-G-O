@@ -27,7 +27,9 @@ export const THRESHOLDS = {
   /** max rain probability (%) in the 15-day window triggering pre-rain protection */
   rainProbHigh: 60,
   /** current relative humidity (%) triggering powdery mildew advisory */
-  humidityHigh: 85
+  humidityHigh: 85,
+  /** good-ratio % below which the "high poor-yield ratio" advisory fires */
+  goodRatioLow: 50
 };
 
 /**
@@ -129,6 +131,25 @@ export const RECOMMENDATION_RULES = [
     icon: 'Bug',
     badge: 'MEDIUM PRIORITY',
     organicAlternative: 'Neem seed kernel extract (NSKE 5%) spray with soap sticker.'
+  },
+  {
+    id: 'rule-high-poor-ratio',
+    metric: 'goodRatio',
+    op: '<',
+    thresholdKey: 'goodRatioLow',
+    category: 'YIELD',
+    title: 'High Poor-Yield Ratio — Intensive Monitoring Required',
+    priority: 'HIGH',
+    priorityColor: 'red',
+    shortText: 'More than half of sampled buds classified as Poor Yield Potential. Immediate intervention advised.',
+    fullExplanation:
+      'When the majority of scanned buds show Poor Yield Potential signatures, the risk of significantly reduced harvest is elevated. Early action on irrigation, nutrition, and pest management can improve flower retention before the critical pollination window closes.',
+    actionRequired:
+      'Review irrigation schedule, inspect panicles for early hopper/thrips activity, and consider a foliar boron/zinc application. Consult your local agricultural extension officer if the ratio remains above 50% after 5 days.',
+    timing: 'Immediate — within 24–48 hours',
+    icon: 'AlertTriangle',
+    badge: 'HIGH PRIORITY',
+    organicAlternative: 'Jeevamrutha foliar spray (5%) + neem seed kernel extract (NSKE 5%) as a combined intervention.'
   },
   {
     id: 'rule-high-humidity-mildew',

@@ -107,7 +107,13 @@ const gatherMetrics = async ({ farmId, plotId, userId, predictionId = null }) =>
     humidity: null,
     windSpeed: null,
     maxRainProb: 0,
-    maxRainMm: 0
+    maxRainMm: 0,
+    // CNN-derived counts populated from the latest Prediction record
+    goodYieldCount: null,
+    poorYieldCount: null,
+    totalSamples: null,
+    goodRatio: null,
+    avgConfidence: null
   };
   let inputsDemo = true;
 
@@ -152,6 +158,16 @@ const gatherMetrics = async ({ farmId, plotId, userId, predictionId = null }) =>
     metrics.flowerDropRisk =
       prediction.factors?.flowerDropRisk?.value ?? prediction.flowerDropRisk ?? metrics.flowerDropRisk;
     metrics.flowerDropRiskScore = riskToScore(metrics.flowerDropRisk);
+    // Populate CNN sample counts if the prediction record carries them
+    if (prediction.goodYieldCount != null) metrics.goodYieldCount = prediction.goodYieldCount;
+    if (prediction.poorYieldCount != null) metrics.poorYieldCount = prediction.poorYieldCount;
+    if (prediction.goodYieldCount != null || prediction.poorYieldCount != null) {
+      const g = prediction.goodYieldCount ?? 0;
+      const p = prediction.poorYieldCount ?? 0;
+      metrics.totalSamples = g + p;
+      metrics.goodRatio    = metrics.totalSamples > 0 ? Math.round((g / metrics.totalSamples) * 100) : null;
+    }
+    metrics.avgConfidence = prediction.confidence ?? null;
     if (prediction.isDemo !== true) inputsDemo = false;
   }
 
@@ -175,21 +191,59 @@ const gatherMetrics = async ({ farmId, plotId, userId, predictionId = null }) =>
   return { metrics, inputsDemo };
 };
 
-const ruleToRecommendation = (rule, isDemo) => ({
-  id: rule.id,
-  category: rule.category,
-  title: rule.title,
-  priority: rule.priority,
-  priorityColor: rule.priorityColor,
-  shortText: rule.shortText,
-  fullExplanation: rule.fullExplanation,
-  actionRequired: rule.actionRequired,
-  timing: rule.timing,
-  icon: rule.icon,
-  badge: rule.badge,
-  organicAlternative: rule.organicAlternative,
-  isDemo
-});
+/**
+ * Build a recommendation object from a matched rule, injecting a
+ * `detectedContext` sentence that explains WHY the rule fired so each
+ * advisory is self-explaining and mentor-friendly.
+ */
+const ruleToRecommendation = (rule, isDemo, metrics = {}) => {
+  let detectedContext = null;
+
+  if (rule.id === 'rule-low-bud-health-nutrition') {
+    detectedContext = `Bud health score is ${metrics.budHealth}% (threshold: < 70%). ${
+      metrics.totalSamples != null
+        ? `${metrics.poorYieldCount ?? '?'} of ${metrics.totalSamples} samples classified Poor Yield Potential.`
+        : ''
+    }`.trim();
+  } else if (rule.id === 'rule-high-flower-drop-irrigation') {
+    detectedContext = `Flower-drop risk is ${metrics.flowerDropRisk} (score ${metrics.flowerDropRiskScore}/2). ${
+      metrics.goodRatio != null ? `Good-yield ratio: ${metrics.goodRatio}%.` : ''
+    }`.trim();
+  } else if (rule.id === 'rule-rain-window-pre-rain-protection') {
+    detectedContext = `15-day forecast shows ${metrics.maxRainProb}% maximum rain probability (threshold: ≥ 60%).`;
+  } else if (rule.id === 'rule-healthy-bloom-pollination') {
+    detectedContext = `Bud health score is ${metrics.budHealth}% (threshold: ≥ 75%). ${
+      metrics.totalSamples != null
+        ? `${metrics.goodYieldCount ?? '?'} of ${metrics.totalSamples} samples classified Good Yield Potential.`
+        : ''
+    }`.trim();
+  } else if (rule.id === 'rule-pest-pressure-monitoring') {
+    detectedContext = `Pest pressure score is ${metrics.pestPressureScore} (threshold: ≥ 1). Flower-drop risk: ${metrics.flowerDropRisk}${
+      metrics.poorYieldDetected ? ', recent Poor Yield classification detected' : ''
+    }.`;
+  } else if (rule.id === 'rule-high-humidity-mildew') {
+    detectedContext = `Current humidity is ${metrics.humidity}% (threshold: ≥ 85%).`;
+  } else if (rule.id === 'rule-high-poor-ratio') {
+    detectedContext = `${metrics.poorYieldCount ?? '?'} of ${metrics.totalSamples} samples (${100 - (metrics.goodRatio ?? 100)}% poor ratio) classified Poor Yield Potential.`;
+  }
+
+  return {
+    id: rule.id,
+    category: rule.category,
+    title: rule.title,
+    priority: rule.priority,
+    priorityColor: rule.priorityColor,
+    shortText: rule.shortText,
+    detectedContext,
+    fullExplanation: rule.fullExplanation,
+    actionRequired: rule.actionRequired,
+    timing: rule.timing,
+    icon: rule.icon,
+    badge: rule.badge,
+    organicAlternative: rule.organicAlternative,
+    isDemo
+  };
+};
 
 export const recommendationService = {
   /**
@@ -202,7 +256,10 @@ export const recommendationService = {
 
     const matched = evaluateRules(metrics);
     if (matched.length > 0) {
-      return matched.map((rule) => ruleToRecommendation(rule, inputsDemo));
+      // Sort by priority: HIGH first, then MEDIUM, then LOW
+      const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+      matched.sort((a, b) => (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3));
+      return matched.map((rule) => ruleToRecommendation(rule, inputsDemo, metrics));
     }
 
     // Fallback 1: seeded recommendations from the DB (demo seed data)
