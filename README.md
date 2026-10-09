@@ -19,6 +19,7 @@
   <a href="https://www.mongodb.com"><img src="https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white" alt="MongoDB"></a>
   <img src="https://img.shields.io/badge/tests-38%2F38%20passing-brightgreen" alt="38/38 tests passing">
   <img src="https://img.shields.io/badge/demo%20data-badged%20isDemo-blueviolet" alt="demo data always badged isDemo">
+  <img src="https://img.shields.io/badge/recommendations-rule--driven%20%2B%20context--aware-10b981" alt="rule-driven context-aware recommendations">
 </p>
 
 <p align="center">
@@ -48,8 +49,10 @@
 | 🛡️ **Secure by default** | JWT + ownership checks on every data route, mass-assignment whitelists, CORS allow-list, `JWT_SECRET` fail-fast in production, no stack-trace leaks. |
 | ⚡ **Resilient** | MongoDB or the ML service offline? The backend keeps serving *flagged* demo data instead of crashing. Quality failures return `200 + errors[]`, never a bare 500. |
 | ✅ **Proven, not asserted** | **38/38** automated API tests pass both offline and against the full live stack — plus a 5-level field guide in [`TESTING.md`](TESTING.md). |
+| 🔍 **Context-aware advisories** | Every recommendation card shows a *"why this fired"* sentence derived from real CNN output — e.g. *"3 of 4 samples classified Poor Yield Potential"* — so farmers understand the reasoning, not just the action. |
+| 💾 **Offline-resilient frontend** | After any successful analysis the result is cached in `localStorage`. If the API is momentarily unreachable, the Yield Prediction page shows the last real result instead of static placeholder numbers. |
 
-**By the numbers:** 4 services · 9 route groups · 38 tests · 1 trained CNN · 0 fabricated results.
+**By the numbers:** 4 services · 9 route groups · 38 tests · 1 trained CNN · 7 recommendation rules · 0 fabricated results.
 
 ---
 
@@ -309,7 +312,21 @@ OPENMETEO_LOCATION_NAME=Open-Meteo (farm coordinates)
 
 Recommendations live in `backend/src/config/recommendationRules.js`:
 `IF <metric> <op> <threshold> THEN <advisory>` — every threshold exported in
-`THRESHOLDS` and unit-tested (18 rules).
+`THRESHOLDS` and unit-tested (7 active rules).
+
+**Active rules and what triggers them:**
+
+| Rule ID | Metric | Fires when | Priority |
+| :--- | :--- | :--- | :--- |
+| `rule-high-poor-ratio` | `goodRatio` | < 50 % of samples are Good Yield | 🔴 HIGH |
+| `rule-high-flower-drop-irrigation` | `flowerDropRiskScore` | score ≥ 2 (High risk) | 🔴 HIGH |
+| `rule-rain-window-pre-rain-protection` | `maxRainProb` | 15-day forecast ≥ 60 % rain | 🔴 HIGH |
+| `rule-high-humidity-mildew` | `humidity` | current RH ≥ 85 % | 🔴 HIGH |
+| `rule-healthy-bloom-pollination` | `budHealth` | ≥ 75 % — protect what's working | 🟡 MEDIUM |
+| `rule-pest-pressure-monitoring` | `pestPressureScore` | score ≥ 1 | 🟡 MEDIUM |
+| `rule-low-bud-health-nutrition` | `budHealth` | < 70 % | 🟢 LOW |
+
+Each fired rule injects a `detectedContext` sentence (e.g. *"2 of 3 samples classified Poor Yield Potential"*) so farmers can trace every advisory back to the CNN output that triggered it.
 
 </details>
 
@@ -323,7 +340,7 @@ Recommendations live in `backend/src/config/recommendationRules.js`:
 1. **`User`**: `name`, `email` (unique index), `password` (bcrypt hash), `phone`, `role` (`farmer`, `agronomist`), `location`.
 2. **`Farm`**: `userId` (indexed), `name`, `location`, `totalArea`, `establishedYear`, `soilType`, `irrigationType`, `season` (indexed), `isDemo`, `plots` (subdocuments: `id`, `name`, `variety`, `treeCount`, `treeAge`, `floweringStage`, `healthScore`, `expectedYield`, `yieldUnit`, `flowerDropRisk`, `climateRisk`).
 3. **`Image`**: `userId` (indexed), `farmId`, `plotId`, `season` (indexed), `filename`, `url`, `filePath`, `canopyDirection`, `stage`, `quality` (`blurScore`, `isBlurry`, `brightness`), `classification`, `confidence`, `isDemo`. *(No bud counts or bounding boxes are ever fabricated — `CONTRACT.md` §0.)*
-4. **`Prediction`**: `userId` (indexed), `farmId`, `plotId`, `season` (indexed), `variety`, `floweringStage`, `expectedYieldMin/Max/Average`, `totalPlotExpectedMin/Max`, `factors` (`budHealth`, `climate`, `flowerDropRisk`, `pestRisk`), `modelVersion` (`budModel`, `yieldModel`), `isDemo`.
+4. **`Prediction`**: `userId` (indexed), `farmId`, `plotId`, `season` (indexed), `variety`, `floweringStage`, `expectedYieldMin/Max/Average`, `totalPlotExpectedMin/Max`, `factors` (`budHealth`, `climate`, `flowerDropRisk`, `pestRisk`) — all computed from real CNN output, never hardcoded — `sampleCount`, `goodYieldCount`, `poorYieldCount`, `confidence` (CNN sample stats for downstream recommendation engine), `modelVersion` (`budModel`, `yieldModel`), `isDemo`.
 5. **`Weather`**: `farmId`, temperature, condition, humidity, rainfall, windSpeed, solarRadiation, vaporPressureDeficit, soilMoisture, `isDemo`, `forecast` (15 projections, each carrying `isDemo`), `summary`.
 6. **`Recommendation`**: `farmId`, `plotId`, `predictionId`, `category` (`WATER`, `PEST`, `POLLINATION`, `NUTRITION`, `DISEASE`, `WEATHER`), `title`, `priority` (`HIGH`/`MEDIUM`/`LOW`), `shortText`, `fullExplanation`, `actionRequired`, `timing`, `organicAlternative`, `isDemo`.
 7. **`HistoryRecord`**: `userId` (indexed), `farmId`, `season` (indexed), `imageIds`, `classification`, `confidence`, `climate` (temp/humidity/isLive), numeric yield fields, `modelVersion`, `plot`, `plotDetails`, `date` (`createdAt` indexed), `budHealth`, `flowerDropRisk`, `climateCondition`, `predictedYield`, `totalTonnes`, `sampleCount`, `keyObservation`, `isDemo`.
@@ -392,6 +409,10 @@ MangoSense/
   leakage-proof group splits.
 - 🗓️ **Live weather by default** — `WEATHER_PROVIDER=openmeteo` (keyless) once
   farm coordinates are configured.
+- 🔔 **Push advisories** — send `detectedContext`-enriched recommendations via
+  WhatsApp/SMS when a new analysis crosses a HIGH-priority threshold.
+- 📱 **PWA offline mode** — extend the `localStorage` analysis cache into a full
+  service-worker cache so the dashboard works entirely offline after first load.
 
 ---
 
