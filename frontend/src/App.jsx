@@ -15,6 +15,7 @@ import HelpSupportView from './components/help/HelpSupportView';
 import SettingsView from './components/settings/SettingsView';
 import NotificationsView from './components/notifications/NotificationsView';
 import LoginView from './components/auth/LoginView';
+import LandingView from './components/landing/LandingView';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -34,10 +35,19 @@ export default function App() {
   );
 }
 
+function normalizePath(pathname) {
+  if (!pathname || pathname === '/') return '/';
+  // Strip trailing slashes
+  return pathname.replace(/\/+$/, '');
+}
+
 function AppShell() {
   const { user, demoMode, initializing: authInitializing } = useAuth();
 
-  // Navigation & View State
+  // URL Path & routing state
+  const [currentPath, setCurrentPath] = useState(() => normalizePath(window.location.pathname));
+
+  // Navigation & View State (for internal app tabs)
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -59,6 +69,24 @@ function AppShell() {
   // Dashboard data loading state (spec §30/§22)
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // Sync with browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(normalizePath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Programmatic navigation helper that maintains window.history
+  const navigateTo = (path) => {
+    const normalized = normalizePath(path);
+    if (window.location.pathname !== normalized) {
+      window.history.pushState({}, '', normalized);
+    }
+    setCurrentPath(normalized);
+  };
+
   // Re-render when API reachability changes (drives offline notice + badges)
   const [, setApiTick] = useState(0);
   useEffect(() => subscribeApiStatus(() => setApiTick((t) => t + 1)), []);
@@ -78,10 +106,7 @@ function AppShell() {
     mockFarmService.getFarms().then(res => {
       if (res && res.length > 0) {
         setFarms(res);
-        // Reconcile the selection with the loaded list. State starts on demo
-        // ids ('farm-1'); when the backend returns real farms with ObjectId
-        // ids, keeping 'farm-1' would post farmId=farm-1 on every analysis and
-        // the run would never attach to (or update) the real farm record.
+        // Reconcile the selection with the loaded list.
         const nextFarm = res.some(f => f.id === selectedFarm) ? selectedFarm : res[0].id;
         setSelectedFarm(nextFarm);
         const farmObj = res.find(f => f.id === nextFarm);
@@ -104,10 +129,6 @@ function AppShell() {
       if (res && res.length > 0) setHistory(res);
     }).finally(done);
 
-    // Overall farm risk banner source — see mockRecommendationService:
-    // getOverallFarmRisk() is an EXPLICIT mock fallback (no backend endpoint
-    // exists in CONTRACT.md §3); RecommendationsView prefers a backend value
-    // embedded in the recommendations payload when one is provided.
     mockRecommendationService.getOverallFarmRisk().then(res => {
       if (res) setOverallRisk(res);
     });
@@ -127,9 +148,6 @@ function AppShell() {
       if (data.result.images) setAnalysisImages(data.result.images);
       setAnalysisResult(data.result);
     }
-    // The run has just been persisted server-side — refetch everything it
-    // changed so History, Dashboard, Yield Prediction and Recommendations show
-    // the real result without a page reload (spec §18/§23/§24).
     if (!demoMode) {
       mockHistoryService.getHistory().then(res => {
         if (res && res.length > 0) setHistory(res);
@@ -154,7 +172,7 @@ function AppShell() {
     setActiveTab('new-analysis');
   };
 
-  // Auth gate: no session -> login/register screen instead of the app shell.
+  // Auth gate / Session restoration loading state
   if (authInitializing) {
     return (
       <div className="min-h-screen bg-[#F8FAF8] flex flex-col items-center justify-center gap-3 text-slate-800 antialiased font-sans">
@@ -163,14 +181,96 @@ function AppShell() {
       </div>
     );
   }
+
+  // Routing Decision:
+  // 1. If at `/` (or unauthenticated without a specific sub-route), show Public Landing Page.
+  // 2. If at `/login`, show Sign In view.
+  // 3. If at `/register`, show Register view.
+  // 4. If at `/dashboard` (or user is logged in and visits application tabs), show authenticated Dashboard workspace.
+
+  const isPublicLanding = currentPath === '/';
+  const isLoginPage = currentPath === '/login';
+  const isRegisterPage = currentPath === '/register';
+
+  // If user is NOT authenticated:
   if (!user) {
-    return <LoginView />;
+    if (isLoginPage) {
+      return (
+        <LoginView
+          initialMode="login"
+          onNavigateHome={() => navigateTo('/')}
+        />
+      );
+    }
+    if (isRegisterPage) {
+      return (
+        <LoginView
+          initialMode="register"
+          onNavigateHome={() => navigateTo('/')}
+        />
+      );
+    }
+    // Default for `/` or any unauthorized direct access
+    return (
+      <LandingView
+        onNavigateLogin={() => navigateTo('/login')}
+        onNavigateRegister={() => navigateTo('/register')}
+        onGoToDashboard={() => navigateTo('/dashboard')}
+        isAuthenticated={false}
+      />
+    );
   }
 
-  // Global offline/demo notice — errors are never silently swallowed (§22).
-  // In demo mode the backend is intentionally not used (requests 401 without a
-  // token), so the "server refused" notice would be misleading — demo data is
-  // already labelled "Demo Data" everywhere and TopBar shows the demo pill.
+  // If user IS authenticated:
+  // If they visit `/` explicitly, we still show the Public Landing Page with a "Go to Dashboard" button,
+  // honoring the requirement: "If a user is already authenticated and visits '/', show a suitable option to open the dashboard. Do not unnecessarily log out or redirect users in a loop."
+  if (isPublicLanding) {
+    return (
+      <LandingView
+        onNavigateLogin={() => navigateTo('/login')}
+        onNavigateRegister={() => navigateTo('/register')}
+        onGoToDashboard={() => navigateTo('/dashboard')}
+        isAuthenticated={true}
+      />
+    );
+  }
+
+  if (isLoginPage || isRegisterPage) {
+    // Already authenticated user clicking /login or /register can go to dashboard
+    return (
+      <div className="min-h-screen bg-[#F8FAF8] flex items-center justify-center px-4 py-8 text-slate-800 antialiased font-sans">
+        <div className="w-full max-w-md bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center border border-amber-200/60 mx-auto">
+            <svg className="w-8 h-8" viewBox="0 0 32 32" fill="none">
+              <path d="M16 5C11.5 5 6 8.5 6 16C6 24.5 13.5 29 16 29C18.5 29 26 24.5 26 16C26 8.5 20.5 5 16 5Z" fill="#F59E0B" />
+              <path d="M17.5 5C17.5 3 16 1.8 14.5 2" stroke="#15803D" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M17 5C20.5 3.5 24 4.5 25 7C22 7.5 18.5 7 17 5Z" fill="#16A34A" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 font-display">Already Signed In</h2>
+          <p className="text-xs text-slate-500">
+            You are signed in as <strong>{user?.name || user?.email || 'Farmer'}</strong>.
+          </p>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              onClick={() => navigateTo('/dashboard')}
+              className="w-full bg-[#166534] hover:bg-[#14532D] text-white py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer"
+            >
+              Continue to Dashboard
+            </button>
+            <button
+              onClick={() => navigateTo('/')}
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer"
+            >
+              View Public Home Page
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Global offline/demo notice
   const connectivity = getConnectivity();
   const showOfflineNotice = connectivity.observed && !connectivity.anyLive && !demoMode;
 

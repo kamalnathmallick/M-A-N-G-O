@@ -1,10 +1,3 @@
-/**
- * MangoSense Login / Register screen (spec §6).
- * Uses the app's existing design language (emerald #155e34 CTA, rounded-2xl
- * cards, Tailwind utility classes, Lucide icons) — no new UI library.
- * Degrades gracefully when the backend is down: clear error message plus an
- * honestly-labelled offline demo mode.
- */
 import React, { useState } from 'react';
 import {
   Sparkles,
@@ -15,17 +8,18 @@ import {
   ArrowRight,
   LogIn,
   UserPlus,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const inputClass =
   'w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600/30';
 
-export default function LoginView() {
+export default function LoginView({ initialMode = 'login', onNavigateHome }) {
   const { login, register, enterDemoMode, error, setError, initializing } = useAuth();
 
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [mode, setMode] = useState(initialMode); // 'login' | 'register'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -64,9 +58,26 @@ export default function LoginView() {
   return (
     <div className="min-h-screen bg-[#F8FAF8] flex items-center justify-center px-4 py-8 text-slate-800 antialiased font-sans">
       <div className="w-full max-w-md space-y-5">
+        {/* Back to Home link if handler provided */}
+        {onNavigateHome && (
+          <button
+            type="button"
+            onClick={onNavigateHome}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-800 transition-colors cursor-pointer mb-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Home</span>
+          </button>
+        )}
+
         {/* Brand Header (same logo mark as the app shell) */}
         <div className="flex flex-col items-center text-center">
-          <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center border border-amber-200/60 shadow-xs mb-3">
+          <div
+            onClick={onNavigateHome}
+            className={`w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center border border-amber-200/60 shadow-xs mb-3 ${
+              onNavigateHome ? 'cursor-pointer hover:scale-105 transition-transform' : ''
+            }`}
+          >
             <svg className="w-9 h-9" viewBox="0 0 32 32" fill="none">
               <path d="M16 5C11.5 5 6 8.5 6 16C6 24.5 13.5 29 16 29C18.5 29 26 24.5 26 16C26 8.5 20.5 5 16 5Z" fill="#F59E0B" />
               <path d="M17.5 5C17.5 3 16 1.8 14.5 2" stroke="#15803D" strokeWidth="2.2" strokeLinecap="round" />
