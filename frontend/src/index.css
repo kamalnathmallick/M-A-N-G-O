@@ -51,9 +51,13 @@
   box-shadow: 0 20px 40px -15px rgba(22, 101, 52, 0.08), 0 0 0 1px rgba(229, 231, 235, 0.9), 0 1px 3px 0 rgba(0, 0, 0, 0.05);
 }
 
+.shadow-3d-card-hover {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+}
+
 .shadow-3d-card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 24px 48px -12px rgba(22, 101, 52, 0.12), 0 0 0 1px rgba(34, 197, 94, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 26px 50px -12px rgba(22, 101, 52, 0.14), 0 0 0 1px rgba(34, 197, 94, 0.4), 0 6px 12px -2px rgba(0, 0, 0, 0.05);
 }
 
 .shadow-3d-float {
@@ -70,4 +74,65 @@
 
 .perspective-1000 {
   perspective: 1000px;
+}
+
+/* Organic Floating Animations for Spatial Cards */
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0.8deg);
+  }
+}
+
+@keyframes floatGentleAlt {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-1.2deg);
+  }
+}
+
+.animate-float-slow {
+  animation: floatGentle 5.5s ease-in-out infinite;
+}
+
+.animate-float-slow-alt {
+  animation: floatGentleAlt 6.5s ease-in-out 1s infinite;
+}
+
+/* Botanical Atmospheric Moving Mesh Background */
+@keyframes meshDrift {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
+.botanical-mesh-bg {
+  background: radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.14) 0%, transparent 45%),
+              radial-gradient(circle at 80% 30%, rgba(245, 158, 11, 0.10) 0%, transparent 40%),
+              radial-gradient(circle at 50% 80%, rgba(20, 83, 45, 0.08) 0%, transparent 50%),
+              radial-gradient(circle at 90% 85%, rgba(16, 185, 129, 0.09) 0%, transparent 45%);
+  background-size: 150% 150%;
+  animation: meshDrift 18s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-slow,
+  .animate-float-slow-alt,
+  .botanical-mesh-bg,
+  .subtle-pulse {
+    animation: none !important;
+  }
+  .shadow-3d-card-hover:hover {
+    transform: none !important;
+  }
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import HeroBotanicalScene from './HeroBotanicalScene';
 import {
   ArrowRight,
   ShieldCheck,
@@ -15,7 +16,10 @@ import {
   Compass,
   Scan,
   Layers,
-  Info
+  Thermometer,
+  Droplets,
+  Activity,
+  Sparkles
 } from 'lucide-react';
 
 export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoToDashboard, isAuthenticated }) {
@@ -203,18 +207,18 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
       </header>
 
       {/* =========================================================================
-          2. HERO SECTION (Highest Priority Reference Alignment)
+          2. HERO SECTION: Living Mango Intelligence (Interactive 3D Botanical Scene)
          ========================================================================= */}
-      <section id="hero" className="relative pt-12 pb-20 md:pt-18 md:pb-28 overflow-hidden">
-        {/* Soft, layered ambient lighting in background */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] bg-gradient-to-b from-emerald-100/40 via-emerald-50/20 to-transparent pointer-events-none -z-10 blur-3xl" />
-        <div className="absolute top-20 right-10 w-96 h-96 bg-amber-100/30 rounded-full pointer-events-none -z-10 blur-3xl" />
+      <section id="hero" className="relative pt-10 pb-20 md:pt-16 md:pb-28 overflow-hidden botanical-mesh-bg">
+        {/* Animated emerald and warm amber atmospheric glow fields */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[650px] bg-gradient-to-b from-emerald-100/35 via-emerald-50/15 to-transparent pointer-events-none -z-10 blur-3xl" />
+        <div className="absolute top-10 right-1/4 w-[480px] h-[480px] bg-emerald-200/20 rounded-full pointer-events-none -z-10 blur-3xl" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             
             {/* Left Column: Headline, Description, CTAs & Benefits */}
-            <div className="lg:col-span-6 xl:col-span-7 space-y-7 text-center lg:text-left">
+            <div className="lg:col-span-6 xl:col-span-6 space-y-7 text-center lg:text-left z-10">
               
               {/* Eyebrow Pill */}
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-[#166534] text-xs font-bold tracking-wider uppercase shadow-2xs">
@@ -265,9 +269,9 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
               </div>
 
               {/* 3 Compact Benefit Cards with Dimensional / 3D Icon styling */}
-              <div className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-left">
+              <div className="pt-3 grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-left">
                 {/* Highlight 1 */}
-                <div className="p-3.5 rounded-2xl bg-white border border-[#E5E7EB] shadow-3d-card transition-all flex items-center gap-3">
+                <div className="p-3.5 rounded-2xl bg-white/90 backdrop-blur-md border border-[#E5E7EB] shadow-3d-card transition-all flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 text-[#166534] flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-3d-icon">
                     <CheckCircle2 className="w-5 h-5 stroke-[2.2]" />
                   </div>
@@ -280,7 +284,7 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
                 </div>
 
                 {/* Highlight 2 */}
-                <div className="p-3.5 rounded-2xl bg-white border border-[#E5E7EB] shadow-3d-card transition-all flex items-center gap-3">
+                <div className="p-3.5 rounded-2xl bg-white/90 backdrop-blur-md border border-[#E5E7EB] shadow-3d-card transition-all flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-3d-icon-amber">
                     <CloudSun className="w-5 h-5 stroke-[2.2]" />
                   </div>
@@ -293,7 +297,7 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
                 </div>
 
                 {/* Highlight 3 */}
-                <div className="p-3.5 rounded-2xl bg-white border border-[#E5E7EB] shadow-3d-card transition-all flex items-center gap-3">
+                <div className="p-3.5 rounded-2xl bg-white/90 backdrop-blur-md border border-[#E5E7EB] shadow-3d-card transition-all flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 text-[#166534] flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-3d-icon">
                     <Lightbulb className="w-5 h-5 stroke-[2.2]" />
                   </div>
@@ -307,88 +311,78 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
               </div>
             </div>
 
-            {/* Right Column: Hero Visual - Large Orchard Photograph with Floating Analysis Card */}
-            <div className="lg:col-span-6 xl:col-span-5">
-              <div className="relative mx-auto max-w-md lg:max-w-none">
+            {/* Right Column: Interactive 3D Botanical Scene + Floating Spatial Analytics Cards */}
+            <div className="lg:col-span-6 xl:col-span-6 relative">
+              <div className="relative mx-auto max-w-lg lg:max-w-none flex items-center justify-center">
                 
-                {/* Subtle 3D background glow and tilt accent */}
-                <div className="absolute -inset-2 bg-gradient-to-tr from-[#166534]/15 via-emerald-500/10 to-[#F59E0B]/15 rounded-3xl blur-xl -z-10" />
+                {/* Emerald Halo Spotlight behind the 3D fruit */}
+                <div className="absolute inset-0 bg-radial from-emerald-400/25 via-emerald-100/10 to-transparent rounded-full blur-2xl -z-10 pointer-events-none transform scale-90" />
 
-                {/* Main Image Container */}
-                <div className="bg-white rounded-3xl p-2.5 border border-[#E5E7EB] shadow-2xl overflow-hidden relative">
-                  
-                  {/* Photo Frame with real mango bud sample */}
-                  <div className="relative h-72 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-slate-900 group">
-                    <img
-                      src="/samples/landing_orchard.jpg"
-                      alt="Mango flower panicle sample during blooming stage in an orchard"
-                      className="w-full h-full object-cover object-center transform group-hover:scale-102 transition-transform duration-500"
-                      loading="eager"
-                    />
-                    
-                    {/* Dark gradient overlay for caption contrast */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-slate-950/20" />
+                {/* 3D Botanical Scene (Interactive WebGL Canvas) */}
+                <HeroBotanicalScene className="z-10 cursor-grab active:cursor-grabbing" />
 
-                    {/* Top Overlay Badge */}
-                    <div className="absolute top-3.5 left-3.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/60 flex items-center gap-2 shadow-md">
-                      <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-                      <span className="text-xs font-bold text-slate-900">MobileNetV3 Classification</span>
-                    </div>
-
-                    {/* Bottom Translucent Caption Overlay */}
-                    <div className="absolute bottom-4 left-4 right-4 text-white">
-                      <div className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">
-                        OBSERVED SPECIMEN
-                      </div>
-                      <div className="text-base font-bold truncate tracking-tight drop-shadow-sm">
-                        Panicle Elongation & Anthesis
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Floating Analysis Preview Card (Layered & Dimensional) */}
-                  <div className="mt-2.5 p-4 sm:p-5 bg-white rounded-2xl border border-slate-100 shadow-3d-card space-y-3.5">
-                    
-                    {/* Header line of card */}
+                {/* --- FLOATING SPATIAL ANALYTICS CARD 1: Bud Classification (Top-Left) --- */}
+                <div className="hidden sm:block absolute top-6 -left-4 md:-left-8 z-20 animate-float-slow pointer-events-none">
+                  <div className="glass-panel p-4 rounded-2xl border border-white/80 shadow-3d-float max-w-[210px] space-y-2 pointer-events-auto backdrop-blur-md bg-white/85">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-[#166534] border border-emerald-200/80 text-xs font-bold flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Good Yield Potential</span>
-                        </span>
-                        <span className="text-xs text-slate-500 font-semibold">94.2% Confidence</span>
-                      </div>
-                      <span className="text-[11px] font-semibold text-slate-400">Plot A • North Canopy</span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-emerald-700" />
+                        <span>CNN Classification</span>
+                      </span>
                     </div>
-
-                    {/* 3 Metric Indicators */}
-                    <div className="grid grid-cols-3 gap-2.5 pt-1 text-center">
-                      <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-100">
-                        <div className="text-[10px] text-slate-500 font-medium">Bud Health</div>
-                        <div className="text-base font-extrabold text-[#166534] mt-0.5">88%</div>
-                        <div className="text-[9px] text-slate-400 font-semibold">Healthy Buds</div>
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-100">
-                        <div className="text-[10px] text-slate-500 font-medium">Yield Est.</div>
-                        <div className="text-base font-extrabold text-slate-900 mt-0.5">4.8 T/A</div>
-                        <div className="text-[9px] text-slate-400 font-semibold">Rule-based</div>
-                      </div>
-
-                      <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-100">
-                        <div className="text-[10px] text-slate-500 font-medium">Drop Risk</div>
-                        <div className="text-base font-extrabold text-amber-600 mt-0.5">Moderate</div>
-                        <div className="text-[9px] text-slate-400 font-semibold">Monitored</div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 leading-tight">Good Yield Potential</div>
+                      <div className="text-[11px] text-emerald-700 font-extrabold mt-0.5 flex items-center gap-1">
+                        <Activity className="w-3.5 h-3.5" />
+                        <span>94.2% Confidence</span>
                       </div>
                     </div>
-
-                    {/* Transparency footnote on preview card */}
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 pt-0.5">
-                      <Info className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                      <span className="italic">Illustrative demo preview from MangoSense bud observation workflow.</span>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-emerald-600 h-full rounded-full" style={{ width: '94.2%' }} />
                     </div>
                   </div>
                 </div>
+
+                {/* --- FLOATING SPATIAL ANALYTICS CARD 2: Climate & Yield Summary (Bottom-Right) --- */}
+                <div className="hidden sm:block absolute bottom-8 -right-2 md:-right-6 z-20 animate-float-slow-alt pointer-events-none">
+                  <div className="glass-panel p-4 rounded-2xl border border-white/80 shadow-3d-float max-w-[230px] space-y-2.5 pointer-events-auto backdrop-blur-md bg-white/85">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Orchard Telemetry</span>
+                      <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Plot A</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-left">
+                      <div className="p-2 rounded-xl bg-slate-50/90 border border-slate-100/90">
+                        <div className="text-[9px] text-slate-400 font-medium flex items-center gap-1">
+                          <Thermometer className="w-2.5 h-2.5 text-amber-500" />
+                          <span>Climate</span>
+                        </div>
+                        <div className="text-xs font-extrabold text-slate-800 mt-0.5">31°C · 62%</div>
+                      </div>
+
+                      <div className="p-2 rounded-xl bg-slate-50/90 border border-slate-100/90">
+                        <div className="text-[9px] text-slate-400 font-medium flex items-center gap-1">
+                          <Droplets className="w-2.5 h-2.5 text-emerald-600" />
+                          <span>Yield Est.</span>
+                        </div>
+                        <div className="text-xs font-extrabold text-[#166534] mt-0.5">4.8 T/Acre</div>
+                      </div>
+                    </div>
+
+                    <div className="text-[9px] text-slate-400 italic">
+                      * Illustrative preview from MangoSense bud observation workflow.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile-only compact pill under the scene */}
+                <div className="sm:hidden absolute bottom-2 left-1/2 -translate-x-1/2 z-20 w-11/12">
+                  <div className="bg-white/90 backdrop-blur-md p-3 rounded-2xl border border-white shadow-md text-center text-xs">
+                    <span className="font-bold text-slate-900">3D Botanical Model: </span>
+                    <span className="text-emerald-700 font-semibold">Touch & drag to inspect crop</span>
+                  </div>
+                </div>
+
               </div>
             </div>
 
