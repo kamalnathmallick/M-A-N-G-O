@@ -1,28 +1,19 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Trees, 
-  PlusCircle, 
-  CloudSun, 
-  History, 
-  Lightbulb,
-  Sparkles
-} from 'lucide-react';
+import NavIcon3D from './NavIcon3D';
 
 export default function BottomNav({ activeTab, setActiveTab }) {
   const items = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'farms', label: 'Farms', icon: Trees },
-    { id: 'new-analysis', label: 'New Analysis', icon: PlusCircle, highlight: true },
-    { id: 'climate', label: 'Climate', icon: CloudSun },
-    { id: 'recommendations', label: 'Advice', icon: Lightbulb },
-    { id: 'history', label: 'History', icon: History }
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'farms', label: 'Farms' },
+    { id: 'new-analysis', label: 'New Analysis', highlight: true },
+    { id: 'climate', label: 'Climate' },
+    { id: 'recommendations', label: 'Advice' },
+    { id: 'history', label: 'History' }
   ];
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/90 z-40 px-1 xs:px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-lg">
       {items.map((item) => {
-        const Icon = item.icon;
         const isActive = activeTab === item.id;
 
         if (item.highlight) {
@@ -30,12 +21,16 @@ export default function BottomNav({ activeTab, setActiveTab }) {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className="flex flex-col items-center justify-center -mt-5 relative group px-1"
+              className="flex flex-col items-center justify-center -mt-6 relative group px-1 cursor-pointer"
             >
-              <div className="w-11 h-11 xs:w-12 xs:h-12 rounded-full bg-[#155e34] text-white flex items-center justify-center shadow-lg shadow-emerald-900/30 group-active:scale-95 transition-transform">
-                <Icon className="w-5 h-5 xs:w-6 xs:h-6" />
-              </div>
-              <span className="text-[9px] xs:text-[10px] font-bold text-emerald-900 mt-0.5 whitespace-nowrap">
+              <NavIcon3D
+                name={item.id}
+                active={isActive}
+                size="xl"
+                theme="amber"
+                className="rounded-2xl shadow-[0_10px_20px_-4px_rgba(245,158,11,0.5)]"
+              />
+              <span className="text-[9px] xs:text-[10px] font-bold text-emerald-900 mt-1 whitespace-nowrap">
                 {item.label}
               </span>
             </button>
@@ -46,11 +41,11 @@ export default function BottomNav({ activeTab, setActiveTab }) {
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className={`flex flex-col items-center justify-center py-1 px-1 xs:px-2 rounded-lg transition-colors ${
+            className={`group flex flex-col items-center justify-center py-1 px-1 xs:px-2 rounded-lg transition-colors cursor-pointer ${
               isActive ? 'text-[#155e34] font-bold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Icon className={`w-4.5 h-4.5 xs:w-5 xs:h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
+            <NavIcon3D name={item.id} active={isActive} size="sm" />
             <span className="text-[9px] xs:text-[10px] font-medium mt-0.5">{item.label}</span>
           </button>
         );

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/layout/Sidebar';
 import TopBar from './components/layout/TopBar';
 import BottomNav from './components/layout/BottomNav';
+import NavIcon3D, { MangoLogo3D } from './components/layout/NavIcon3D';
 import DashboardView from './components/dashboard/DashboardView';
 import MyFarmsView from './components/farms/MyFarmsView';
 import NewAnalysisWizard from './components/analysis/NewAnalysisWizard';
@@ -285,17 +286,11 @@ function AppShell() {
       {/* Mobile Drawer Navigation Overlay */}
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex animate-in fade-in duration-150">
-          <div className="w-72 bg-white h-full p-4 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-200">
+          <div className="w-72 bg-white h-full p-4 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-200 overflow-y-auto">
             <div>
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-200/60">
-                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
-                      <path d="M16 5C11.5 5 6 8.5 6 16C6 24.5 13.5 29 16 29C18.5 29 26 24.5 26 16C26 8.5 20.5 5 16 5Z" fill="#F59E0B" />
-                      <path d="M17.5 5C17.5 3 16 1.8 14.5 2" stroke="#15803D" strokeWidth="2.2" strokeLinecap="round" />
-                      <path d="M17 5C20.5 3.5 24 4.5 25 7C22 7.5 18.5 7 17 5Z" fill="#16A34A" />
-                    </svg>
-                  </div>
+                <div className="flex items-center gap-2.5 group">
+                  <MangoLogo3D size="sm" />
                   <div>
                     <div className="font-bold text-base text-slate-900 font-display">MangoSense</div>
                     <div className="text-[11px] text-slate-500">Mango Yield Prediction</div>
@@ -303,14 +298,14 @@ function AppShell() {
                 </div>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 font-bold flex items-center justify-center cursor-pointer"
+                  className="w-8 h-8 rounded-xl bg-slate-100 border-b-2 border-slate-300 text-slate-600 font-bold flex items-center justify-center cursor-pointer active:translate-y-0.5"
                 >
                   ✕
                 </button>
               </div>
 
               {/* Mobile Nav items */}
-              <nav className="mt-4 space-y-1">
+              <nav className="mt-4 space-y-1.5">
                 {[
                   { id: 'dashboard', label: 'Dashboard' },
                   { id: 'farms', label: 'My Farms' },
@@ -324,22 +319,26 @@ function AppShell() {
                   { id: 'notifications', label: 'Notifications' },
                   { id: 'help', label: 'Help & Support' },
                   { id: 'settings', label: 'Settings' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors cursor-pointer ${
-                      activeTab === item.id
-                        ? 'bg-[#155e34] text-white font-bold'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                ].map((item) => {
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`group w-full text-left px-3 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2.5 cursor-pointer ${
+                        isActive
+                          ? 'bg-gradient-to-b from-[#1a7340] to-[#13532e] text-white font-bold shadow-3d-nav-active'
+                          : 'text-slate-600 hover:bg-emerald-50/70'
+                      }`}
+                    >
+                      <NavIcon3D name={item.id} active={isActive} size="sm" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
               </nav>
             </div>
 

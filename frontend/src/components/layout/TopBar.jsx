@@ -1,18 +1,11 @@
 import React, { useState } from 'react';
 import { 
   ChevronDown, 
-  SunMedium, 
-  Trees, 
-  User, 
-  Languages, 
-  Volume2, 
   Check, 
-  Menu,
-  Sparkles,
-  MapPin,
-  LogOut
+  MapPin
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import NavIcon3D from './NavIcon3D';
 
 export default function TopBar({
   farms,
@@ -65,10 +58,10 @@ export default function TopBar({
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <button 
           onClick={onOpenMobileMenu}
-          className="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 shrink-0"
+          className="md:hidden group p-1 rounded-xl shrink-0 cursor-pointer"
           aria-label="Open Navigation Menu"
         >
-          <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
+          <NavIcon3D name="menu" size="md" />
         </button>
 
         <div className="min-w-0">
@@ -92,13 +85,13 @@ export default function TopBar({
         <button
           onClick={handleAudioSummary}
           title="Listen to summary audio advisory in simple speech"
-          className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+          className={`group hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-3d-nav-item ${
             speaking 
               ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
-              : 'bg-emerald-50/70 text-emerald-800 border-emerald-200/80 hover:bg-emerald-100'
+              : 'bg-white text-emerald-900 border-emerald-200/80 hover:bg-emerald-50/70'
           }`}
         >
-          <Volume2 className={`w-3.5 h-3.5 ${speaking ? 'text-amber-700' : 'text-emerald-700'}`} />
+          <NavIcon3D name="voice" active={speaking} size="xs" theme={speaking ? 'amber' : 'emerald'} />
           <span>{speaking ? 'Speaking...' : 'Voice Summary'}</span>
         </button>
 
@@ -109,9 +102,9 @@ export default function TopBar({
               setShowFarmDropdown(!showFarmDropdown);
               setShowPlotDropdown(false);
             }}
-            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-50 hover:bg-slate-100/90 text-slate-700 text-xs sm:text-sm font-medium border border-slate-200/80 transition-colors shadow-2xs"
+            className="group flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-medium border border-slate-200/90 shadow-3d-nav-item transition-all cursor-pointer active:scale-98"
           >
-            <Trees className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
+            <NavIcon3D name="farms" size="xs" />
             <span className="max-w-[75px] xs:max-w-[110px] sm:max-w-[180px] truncate font-semibold text-slate-800">
               {currentFarmObj?.name}
             </span>
@@ -157,8 +150,9 @@ export default function TopBar({
               setShowPlotDropdown(!showPlotDropdown);
               setShowFarmDropdown(false);
             }}
-            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-50 hover:bg-slate-100/90 text-slate-700 text-xs sm:text-sm font-medium border border-slate-200/80 transition-colors shadow-2xs"
+            className="group flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-medium border border-slate-200/90 shadow-3d-nav-item transition-all cursor-pointer active:scale-98"
           >
+            <NavIcon3D name="yield" size="xs" />
             <span className="max-w-[65px] xs:max-w-[95px] sm:max-w-[160px] truncate font-semibold text-slate-800">
               {currentPlotObj?.name}
             </span>
@@ -195,10 +189,8 @@ export default function TopBar({
         </div>
 
         {/* Current Weather Pill */}
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-slate-700">
-          <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600">
-            <SunMedium className="w-4 h-4" />
-          </div>
+        <div className="group hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white border border-amber-200/80 shadow-3d-nav-item text-slate-700">
+          <NavIcon3D name="sun" size="sm" theme="amber" />
           <div className="text-left">
             <div className="text-xs font-bold text-slate-900 leading-none">
               {weather.temperature}{weather.temperatureUnit}
@@ -211,9 +203,7 @@ export default function TopBar({
 
         {/* Farmer Profile Pill — real signed-in user + logout */}
         <div className="flex items-center gap-1.5 sm:gap-2 pl-1 sm:pl-2 border-l border-slate-200/80">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-            <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </div>
+          <NavIcon3D name="user" size="sm" theme="emerald" />
           <span className="hidden xl:inline-flex flex-col leading-tight max-w-[140px]">
             <span className="text-xs font-semibold text-slate-700 truncate">
               {user?.name || 'Farmer'}
@@ -225,10 +215,10 @@ export default function TopBar({
           <button
             onClick={logout}
             title={demoMode ? 'Exit demo mode' : 'Sign out'}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-rose-600 transition-colors cursor-pointer"
+            className="group p-1 rounded-xl transition-colors cursor-pointer"
             aria-label="Sign out of MangoSense"
           >
-            <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <NavIcon3D name="logout" size="sm" theme="rose" />
           </button>
         </div>
       </div>

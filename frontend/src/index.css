@@ -65,11 +65,32 @@
 }
 
 .shadow-3d-icon {
-  box-shadow: 0 8px 16px -4px rgba(22, 101, 52, 0.2), inset 0 2px 2px rgba(255, 255, 255, 0.7), inset 0 -2px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 16px -3px rgba(22, 101, 52, 0.28), 0 2px 4px rgba(15, 23, 42, 0.08), inset 0 2px 3px rgba(255, 255, 255, 0.95), inset 0 -2.5px 4px rgba(0, 0, 0, 0.12);
 }
 
 .shadow-3d-icon-amber {
-  box-shadow: 0 8px 16px -4px rgba(245, 158, 11, 0.25), inset 0 2px 2px rgba(255, 255, 255, 0.8), inset 0 -2px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 16px -3px rgba(245, 158, 11, 0.32), 0 2px 4px rgba(15, 23, 42, 0.08), inset 0 2px 3px rgba(255, 255, 255, 0.95), inset 0 -2.5px 4px rgba(180, 83, 9, 0.15);
+}
+
+/* Enhanced 3D Navbar & Navigation Item Styling */
+.shadow-3d-nav-item {
+  box-shadow: 0 6px 12px -3px rgba(15, 23, 42, 0.08), 0 2px 4px 0 rgba(0, 0, 0, 0.04), inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.95), inset 0 -2px 3px 0 rgba(0, 0, 0, 0.06);
+}
+
+.shadow-3d-nav-active {
+  box-shadow: 0 10px 20px -4px rgba(22, 101, 52, 0.42), 0 3px 6px -1px rgba(20, 83, 45, 0.28), inset 0 2px 2px 0 rgba(255, 255, 255, 0.35), inset 0 -3px 4px 0 rgba(0, 0, 0, 0.25);
+}
+
+.shadow-3d-logo-badge {
+  box-shadow: 0 12px 22px -4px rgba(245, 158, 11, 0.42), 0 3px 6px -1px rgba(217, 119, 6, 0.25), inset 0 2px 4px 0 rgba(255, 255, 255, 0.95), inset 0 -3px 5px 0 rgba(180, 83, 9, 0.22);
+}
+
+.shadow-3d-btn-primary {
+  box-shadow: 0 8px 16px -2px rgba(22, 101, 52, 0.4), 0 2px 4px -1px rgba(20, 83, 45, 0.25), inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2.5px 3px 0 rgba(0, 0, 0, 0.22);
+}
+
+.shadow-3d-btn-white {
+  box-shadow: 0 6px 12px -2px rgba(15, 23, 42, 0.1), 0 1px 3px 0 rgba(0, 0, 0, 0.05), inset 0 1.5px 2px 0 rgba(255, 255, 255, 1), inset 0 -2px 3px 0 rgba(0, 0, 0, 0.06);
 }
 
 .perspective-1000 {

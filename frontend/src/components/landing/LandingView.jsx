@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import HeroBotanicalScene from './HeroBotanicalScene';
+import NavIcon3D, { MangoLogo3D } from '../layout/NavIcon3D';
 import {
   ArrowRight,
   ShieldCheck,
@@ -19,7 +20,11 @@ import {
   Thermometer,
   Droplets,
   Activity,
-  Sparkles
+  Sparkles,
+  Home,
+  Workflow,
+  Layout,
+  Info
 } from 'lucide-react';
 
 export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoToDashboard, isAuthenticated }) {
@@ -43,21 +48,14 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
           {/* Left: Brand Logo, Name & Subtitle */}
           <div 
             onClick={() => scrollToSection('hero')} 
-            className="flex items-center gap-3.5 cursor-pointer group"
+            className="flex items-center gap-3.5 cursor-pointer group select-none"
           >
-            {/* 3D-styled Mango Brand Icon */}
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100/90 flex items-center justify-center border border-amber-200/80 shadow-3d-icon-amber group-hover:scale-105 transition-all duration-200">
-              <svg className="w-7 h-7 drop-shadow-xs" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 5C11.5 5 6 8.5 6 16C6 24.5 13.5 29 16 29C18.5 29 26 24.5 26 16C26 8.5 20.5 5 16 5Z" fill="#F59E0B" />
-                <path d="M17.5 5C17.5 3 16 1.8 14.5 2" stroke="#15803D" strokeWidth="2.4" strokeLinecap="round" />
-                <path d="M17 5C20.5 3.5 24 4.5 25 7C22 7.5 18.5 7 17 5Z" fill="#16A34A" />
-                <circle cx="13" cy="14" r="1.5" fill="#D97706" opacity="0.4" />
-              </svg>
-            </div>
+            {/* 3D-sculpted Mango Brand Icon */}
+            <MangoLogo3D size="lg" />
             <div>
               <div className="font-extrabold text-xl leading-tight text-slate-900 tracking-tight font-display flex items-center gap-1.5">
                 <span>MangoSense</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100 shadow-xs" />
               </div>
               <div className="text-[11px] text-slate-500 font-medium tracking-wide">
                 Smart Mango Crop Insights
@@ -65,64 +63,72 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
             </div>
           </div>
 
-          {/* Center Navigation Links (Desktop) */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
+          {/* Center Navigation Links (Desktop with 3D icons) */}
+          <nav className="hidden lg:flex items-center gap-2 bg-slate-50/90 p-1.5 rounded-2xl border border-slate-200/80 shadow-inner">
             <button
               onClick={() => scrollToSection('hero')}
-              className="hover:text-[#166534] transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-emerald-950 hover:bg-white hover:shadow-3d-nav-item hover:-translate-y-0.5 transition-all duration-150 cursor-pointer group"
             >
-              Home
+              <NavIcon3D name="home" size="sm" />
+              <span>Home</span>
             </button>
             <button
               onClick={() => scrollToSection('features')}
-              className="hover:text-[#166534] transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-emerald-950 hover:bg-white hover:shadow-3d-nav-item hover:-translate-y-0.5 transition-all duration-150 cursor-pointer group"
             >
-              Features
+              <NavIcon3D name="features" size="sm" />
+              <span>Features</span>
             </button>
             <button
               onClick={() => scrollToSection('how-it-works')}
-              className="hover:text-[#166534] transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-emerald-950 hover:bg-white hover:shadow-3d-nav-item hover:-translate-y-0.5 transition-all duration-150 cursor-pointer group"
             >
-              How It Works
+              <NavIcon3D name="how-it-works" size="sm" theme="amber" />
+              <span>How It Works</span>
             </button>
             <button
               onClick={() => scrollToSection('product-preview')}
-              className="hover:text-[#166534] transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-emerald-950 hover:bg-white hover:shadow-3d-nav-item hover:-translate-y-0.5 transition-all duration-150 cursor-pointer group"
             >
-              Workspace
+              <NavIcon3D name="workspace" size="sm" theme="sky" />
+              <span>Workspace</span>
             </button>
             <button
               onClick={() => scrollToSection('about')}
-              className="hover:text-[#166534] transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-emerald-950 hover:bg-white hover:shadow-3d-nav-item hover:-translate-y-0.5 transition-all duration-150 cursor-pointer group"
             >
-              About
+              <NavIcon3D name="about" size="sm" theme="slate" />
+              <span>About</span>
             </button>
           </nav>
 
-          {/* Right Action Buttons */}
+          {/* Right Action Buttons with 3D Depth */}
           <div className="hidden sm:flex items-center gap-3">
             {isAuthenticated ? (
               <button
                 onClick={onGoToDashboard}
-                className="bg-[#166534] hover:bg-[#14532D] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-98"
+                className="group bg-gradient-to-b from-[#1a753d] to-[#13532b] hover:from-[#166534] hover:to-[#114624] text-white px-4.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-3d-btn-primary hover:shadow-lg transition-all flex items-center gap-2.5 cursor-pointer active:scale-98"
               >
+                <NavIcon3D name="workspace" size="xs" active />
                 <span>Go to Dashboard</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 ml-0.5" />
               </button>
             ) : (
               <>
                 <button
                   onClick={onNavigateLogin}
-                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100/80 transition-colors cursor-pointer"
+                  className="group px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:text-slate-950 bg-white hover:bg-slate-50 border border-slate-200/90 shadow-3d-btn-white transition-all flex items-center gap-2 cursor-pointer active:scale-98"
                 >
-                  Sign In
+                  <NavIcon3D name="login" size="xs" theme="slate" />
+                  <span>Sign In</span>
                 </button>
                 <button
                   onClick={onNavigateRegister}
-                  className="bg-[#166534] hover:bg-[#14532D] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-98"
+                  className="group bg-gradient-to-b from-[#1a753d] to-[#13532b] hover:from-[#166534] hover:to-[#114624] text-white px-4.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-3d-btn-primary hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-98"
                 >
+                  <NavIcon3D name="register" size="xs" active />
                   <span>Get Started</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 ml-0.5" />
                 </button>
               </>
             )}
@@ -131,46 +137,57 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
           {/* Mobile Menu Hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100 cursor-pointer"
+            className="lg:hidden group p-1.5 rounded-2xl cursor-pointer active:scale-95"
             aria-label="Toggle navigation"
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {mobileMenuOpen ? (
+              <div className="w-9 h-9 rounded-xl bg-rose-50 border-b-[3px] border-rose-300 flex items-center justify-center text-rose-700 shadow-xs">
+                <X className="w-5 h-5" />
+              </div>
+            ) : (
+              <NavIcon3D name="menu" size="md" />
+            )}
           </button>
         </div>
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-100 bg-white px-4 py-4 space-y-3 shadow-xl animate-in slide-in-from-top-2">
-            <nav className="flex flex-col space-y-2 text-sm font-semibold text-slate-600">
+          <div className="lg:hidden border-t border-slate-100 bg-white px-4 py-4 space-y-3 shadow-xl animate-in slide-in-from-top-2">
+            <nav className="flex flex-col space-y-1.5 text-sm font-semibold text-slate-600">
               <button
                 onClick={() => scrollToSection('hero')}
-                className="text-left px-3 py-2 rounded-lg hover:bg-slate-50 hover:text-[#166534] cursor-pointer"
+                className="group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-50/70 hover:text-[#166534] transition-colors cursor-pointer text-left"
               >
-                Home
+                <NavIcon3D name="home" size="sm" />
+                <span>Home</span>
               </button>
               <button
                 onClick={() => scrollToSection('features')}
-                className="text-left px-3 py-2 rounded-lg hover:bg-slate-50 hover:text-[#166534] cursor-pointer"
+                className="group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-50/70 hover:text-[#166534] transition-colors cursor-pointer text-left"
               >
-                Features
+                <NavIcon3D name="features" size="sm" />
+                <span>Features</span>
               </button>
               <button
                 onClick={() => scrollToSection('how-it-works')}
-                className="text-left px-3 py-2 rounded-lg hover:bg-slate-50 hover:text-[#166534] cursor-pointer"
+                className="group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-50/70 hover:text-[#166534] transition-colors cursor-pointer text-left"
               >
-                How It Works
+                <NavIcon3D name="how-it-works" size="sm" theme="amber" />
+                <span>How It Works</span>
               </button>
               <button
                 onClick={() => scrollToSection('product-preview')}
-                className="text-left px-3 py-2 rounded-lg hover:bg-slate-50 hover:text-[#166534] cursor-pointer"
+                className="group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-50/70 hover:text-[#166534] transition-colors cursor-pointer text-left"
               >
-                Workspace Preview
+                <NavIcon3D name="workspace" size="sm" theme="sky" />
+                <span>Workspace Preview</span>
               </button>
               <button
                 onClick={() => scrollToSection('about')}
-                className="text-left px-3 py-2 rounded-lg hover:bg-slate-50 hover:text-[#166534] cursor-pointer"
+                className="group flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-50/70 hover:text-[#166534] transition-colors cursor-pointer text-left"
               >
-                About MangoSense
+                <NavIcon3D name="about" size="sm" theme="slate" />
+                <span>About MangoSense</span>
               </button>
             </nav>
 
@@ -178,8 +195,9 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
               {isAuthenticated ? (
                 <button
                   onClick={onGoToDashboard}
-                  className="w-full bg-[#166534] text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+                  className="group w-full bg-[#166534] text-white py-3 rounded-xl text-sm font-bold shadow-3d-btn-primary flex items-center justify-center gap-2.5 cursor-pointer"
                 >
+                  <NavIcon3D name="workspace" size="xs" active />
                   <span>Go to Dashboard</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
@@ -187,16 +205,16 @@ export default function LandingView({ onNavigateLogin, onNavigateRegister, onGoT
                 <>
                   <button
                     onClick={onNavigateLogin}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+                    className="group w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 py-3 rounded-xl text-sm font-bold shadow-3d-btn-white flex items-center justify-center gap-2.5 cursor-pointer"
                   >
-                    <LogIn className="w-4 h-4" />
+                    <NavIcon3D name="login" size="xs" theme="slate" />
                     <span>Sign In</span>
                   </button>
                   <button
                     onClick={onNavigateRegister}
-                    className="w-full bg-[#166534] hover:bg-[#14532D] text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                    className="group w-full bg-[#166534] hover:bg-[#14532D] text-white py-3 rounded-xl text-sm font-bold shadow-3d-btn-primary flex items-center justify-center gap-2.5 cursor-pointer"
                   >
-                    <UserPlus className="w-4 h-4" />
+                    <NavIcon3D name="register" size="xs" active />
                     <span>Get Started</span>
                   </button>
                 </>
